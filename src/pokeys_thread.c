@@ -619,14 +619,14 @@ static int api_load(PokeysApi* api, char* error_detail, size_t error_detail_size
 	char path[MAX_PATH];
 	memset(api, 0, sizeof(*api));
 
-	if (!plugin_file_path(path, sizeof(path), "PoKeyslib.dll")) 
+	if (!plugin_file_path(path, sizeof(path), "PoKeyslib.dll"))
 	{
 		strcpy_s(error_detail, error_detail_size, "PoKeys DLL path is too long");
 		return (0);
 	}
-	
+
 	api->module = LoadLibraryA(path);
-	
+
 	if (!api->module) 
 	{
 		DWORD error = GetLastError();
