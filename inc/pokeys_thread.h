@@ -1,6 +1,6 @@
 /**********************************************************************************/
-/* FILE NAME: ppokeys_thread.h                                                    */
-/*   VERSION: 1.0                                                                 */
+/* FILE NAME: pokeys_thread.h                                                     */
+/*   VERSION: 1.0.2                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */

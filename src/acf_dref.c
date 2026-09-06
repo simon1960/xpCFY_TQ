@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: acf_dref.c                                                          */
-/*   VERSION: 1.0                                                                 */
+/*   VERSION: 1.0.2                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -153,6 +153,7 @@ static int				g_parking_brake_release_state;
 #define TQ_TRIM_SIM_MIN								-1.0f
 #define TQ_TRIM_SIM_MAX								(12312.0f / 16383.0f)
 #define TQ_SWITCH_COMMAND_RETRY_SECONDS				0.5f
+#define TQ_HANDLE_RETRY_SECONDS						1.0f
 #define TQ_FLAPS_DATAREF_EPSILON					0.0001f
 
 /* various states for speedbrake and parking brake */
@@ -214,6 +215,9 @@ static TqTrimCommandBinding g_trim_command_bindings[] =
 	{ "sim/flight_controls/pitch_trimB_up", NULL, 1, 0 }
 };
 static int g_trim_command_handlers_registered;
+static int g_aircraft_active;
+static int g_aircraft_data_valid;
+static float g_next_handle_retry_time;
 
 #define TQ_FIRST_RUN_ALL (TQ_FIRST_RUN_PARKING_BRAKE | TQ_FIRST_RUN_FUEL_CUTOFFS | TQ_FIRST_RUN_TRIM_CUTOUTS | TQ_FIRST_RUN_TRIM_POSITION | TQ_FIRST_RUN_FLAPS)
 
@@ -580,6 +584,8 @@ void TqControlsReset(void)
 	g_speedbrake_auto_retract_issued = 0;
 	g_speedbrake_touchdown_time = 0.0f;
 	g_first_run_pending = TQ_FIRST_RUN_ALL;
+	g_aircraft_data_valid = 0;
+	g_next_handle_retry_time = 0.0f;
 	log_write("First Run started: waiting for simulator data and valid TQ inputs");
 }
 
@@ -591,21 +597,55 @@ void TqControlsSetCalibration(const TqCalibration* calibration, int valid)
 	TqControlsReset();
 }
 
+/* Stop every simulator/hardware ownership path without starting a new First Run. */
+void TqControlsDeactivate(void)
+{
+	end_parking_brake_set_command("TQ controls deactivated");
+	pokeys_set_trim_target(0U, 0);
+	pokeys_set_trim_manual_command(0, 0);
+	pokeys_set_trim_indicator_target(0U, 0);
+	pokeys_set_throttle_follow_targets(0U, 0U, 0U, 0U, 0);
+	(void)pokeys_take_throttle_manual_override();
+	g_first_run_pending = 0U;
+	g_trim_first_run_active = 1;
+	TqControlsSetAircraftActive(0);
+}
+
 /* 
  * check the aircraft is on the ground and the battery master is off
  * before we allow any motorised test runs (e.g. speedbrake, throttles)
  */
 int TqGroundTestControlsAllowed(void)
 {
-	return (acData.battery_on == 0.0f && acData.on_ground != 0);
+	return (g_aircraft_active && g_aircraft_data_valid &&
+		acData.battery_on == 0.0f && acData.on_ground != 0);
 }
 
-static void set_float_dataref(dataRefLine line, float value)
+/*
+ * Mark simulator data as usable only while the user's supported aircraft is
+ * active. Clearing the data block prevents UI safety decisions from using the
+ * preceding aircraft's battery or weight-on-wheels values.
+ */
+void TqControlsSetAircraftActive(int active)
+{
+	uint16_t index;
+	g_aircraft_active = active != 0;
+	g_aircraft_data_valid = 0;
+	if (g_aircraft_active) return;
+
+	memset(&acData, 0, sizeof(acData));
+	for (index = 0; index < DREF_END; ++index)
+		drefTable[index].handle = NULL;
+	for (index = 0; index < CMD_END; ++index)
+		cmdTable[index].handle = NULL;
+}
+
+static int set_float_dataref(dataRefLine line, float value)
 {
 	drefTable_p entry = &drefTable[line];
 
 	if (entry->handle == NULL || !entry->isWriteable) 
-		return;
+		return(0);
 	
 	if (entry->isArray)
 		XPLMSetDatavf(entry->handle, &value, entry->arrayOffset, 1);
@@ -615,6 +655,7 @@ static void set_float_dataref(dataRefLine line, float value)
 
 	if (entry->ptrVal != NULL) 
 		*(float*)entry->ptrVal = value;
+	return(1);
 }
 
 /*
@@ -880,11 +921,17 @@ static void ProcessTqFuelCutoffSwitches(void)
 	if (!inputs.connected || !inputs.valid ||
 		inputs.sequence == g_last_fuel_cutoff_sequence)
 		return;
+	if (drefTable[DREF_FUEL_CUTOFF_LT].handle == NULL ||
+		drefTable[DREF_FUEL_CUTOFF_RT].handle == NULL ||
+		!drefTable[DREF_FUEL_CUTOFF_LT].isWriteable ||
+		!drefTable[DREF_FUEL_CUTOFF_RT].isWriteable)
+		return;
 
-	set_float_dataref(DREF_FUEL_CUTOFF_LT,
-		inputs.left_cutoff ? 0.0f : 1.0f);
-	set_float_dataref(DREF_FUEL_CUTOFF_RT,
-		inputs.right_cutoff ? 0.0f : 1.0f);
+	if (!set_float_dataref(DREF_FUEL_CUTOFF_LT,
+		inputs.left_cutoff ? 0.0f : 1.0f) ||
+		!set_float_dataref(DREF_FUEL_CUTOFF_RT,
+			inputs.right_cutoff ? 0.0f : 1.0f))
+		return;
 	g_last_fuel_cutoff_sequence = inputs.sequence;
 	first_run_component_complete(TQ_FIRST_RUN_FUEL_CUTOFFS,
 		"left and right fuel-cutoff switches");
@@ -1499,26 +1546,32 @@ static void ProcessTqLeverWrites(void)
 			absolute_difference(throttle_left_output,
 				acData.throttle_ratio_left) > TQ_THROTTLE_DATAREF_EPSILON)
 		{
-			set_float_dataref(DREF_THROTTLE_RATIO_LT, throttle_left_output);
-			g_last_throttle_left_written = throttle_left_output;
-			g_throttle_left_written = 1;
+			if (set_float_dataref(DREF_THROTTLE_RATIO_LT, throttle_left_output))
+			{
+				g_last_throttle_left_written = throttle_left_output;
+				g_throttle_left_written = 1;
+			}
 		}
 		if (!g_throttle_right_written ||
 			throttle_right_output != g_last_throttle_right_written ||
 			absolute_difference(throttle_right_output,
 				acData.throttle_ratio_right) > TQ_THROTTLE_DATAREF_EPSILON)
 		{
-			set_float_dataref(DREF_THROTTLE_RATIO_RT, throttle_right_output);
-			g_last_throttle_right_written = throttle_right_output;
-			g_throttle_right_written = 1;
+			if (set_float_dataref(DREF_THROTTLE_RATIO_RT, throttle_right_output))
+			{
+				g_last_throttle_right_written = throttle_right_output;
+				g_throttle_right_written = 1;
+			}
 		}
 	}
 
 	if (!g_speedbrake_written || speedbrake_output != g_last_speedbrake_written)
 	{
-		set_float_dataref(DREF_SPD_BRAKE_LEVER, speedbrake_output);
-		g_last_speedbrake_written = speedbrake_output;
-		g_speedbrake_written = 1;
+		if (set_float_dataref(DREF_SPD_BRAKE_LEVER, speedbrake_output))
+		{
+			g_last_speedbrake_written = speedbrake_output;
+			g_speedbrake_written = 1;
+		}
 	}
 	if (speedbrake_state != g_last_speedbrake_state)
 	{
@@ -1588,7 +1641,10 @@ static void ProcessTqLeverWrites(void)
 		float desired = flaps_value[flaps_detent];
 		if (absolute_difference(acData.flaps_lever, desired) >
 			TQ_FLAPS_DATAREF_EPSILON)
-			set_float_dataref(DREF_FLAPS_LEVER, desired);
+		{
+			if (!set_float_dataref(DREF_FLAPS_LEVER, desired))
+				return;
+		}
 		g_last_flaps_detent = flaps_detent;
 		g_flaps_written = 1;
 		if (first_sync)
@@ -1696,6 +1752,36 @@ static void ProcessTqAtDisconnectButtons(state_table_p state)
 	right_at_disco_handler((void*)state);
 }
 
+/*
+ * Balance every command begun by a physical momentary switch before its flight
+ * loop is stopped. This is required during aircraft unload, plugin disable and
+ * final shutdown because no later input snapshot is then available to deliver
+ * the release edge.
+ */
+void ReleaseTqPushbuttonCommands(void* param)
+{
+	state_table_p ptr = (state_table_p)param;
+	if (ptr == NULL) return;
+
+	if (ptr->ltTogaIsActive && cmdTable[CMD_LT_TOGA].handle != NULL)
+		XPLMCommandEnd(cmdTable[CMD_LT_TOGA].handle);
+	if (ptr->rtTogaIsActive && cmdTable[CMD_RT_TOGA].handle != NULL)
+		XPLMCommandEnd(cmdTable[CMD_RT_TOGA].handle);
+	if (ptr->ltAtDiscoIsActive && cmdTable[CMD_LT_AT_DISCO].handle != NULL)
+		XPLMCommandEnd(cmdTable[CMD_LT_AT_DISCO].handle);
+	if (ptr->rtAtDiscoIsActive && cmdTable[CMD_RT_AT_DISCO].handle != NULL)
+		XPLMCommandEnd(cmdTable[CMD_RT_AT_DISCO].handle);
+
+	ptr->lt_toga = ptr->lt_toga_prev = 0;
+	ptr->rt_toga = ptr->rt_toga_prev = 0;
+	ptr->lt_at_disco = ptr->lt_at_disco_prev = 0;
+	ptr->rt_at_disco = ptr->rt_at_disco_prev = 0;
+	ptr->ltTogaIsActive = false;
+	ptr->rtTogaIsActive = false;
+	ptr->ltAtDiscoIsActive = false;
+	ptr->rtAtDiscoIsActive = false;
+}
+
 /* process left (captain) TO/GA switch */
 void left_toga_handler(void* param)
 {
@@ -1708,14 +1794,20 @@ void left_toga_handler(void* param)
 		if (ptr->lt_toga == 1 && !ptr->ltTogaIsActive)
 		{
 			ptr->lt_toga_prev = ptr->lt_toga;
-			ptr->ltTogaIsActive = true;
-			XPLMCommandBegin(cmdTable[CMD_LT_TOGA].handle);
+			if (cmdTable[CMD_LT_TOGA].handle != NULL)
+			{
+				ptr->ltTogaIsActive = true;
+				XPLMCommandBegin(cmdTable[CMD_LT_TOGA].handle);
+			}
+			else
+				log_write("Left TO/GA press ignored: command handle is unavailable");
 		}
-		else if (ptr->lt_toga == 0 && ptr->ltTogaIsActive)
+		else if (ptr->lt_toga == 0)
 		{
 			ptr->lt_toga_prev = ptr->lt_toga;
+			if (ptr->ltTogaIsActive && cmdTable[CMD_LT_TOGA].handle != NULL)
+				XPLMCommandEnd(cmdTable[CMD_LT_TOGA].handle);
 			ptr->ltTogaIsActive = false;
-			XPLMCommandEnd(cmdTable[CMD_LT_TOGA].handle);
 		}
 	}
 }
@@ -1732,14 +1824,20 @@ void right_toga_handler(void* param)
 		if (ptr->rt_toga == 1 && !ptr->rtTogaIsActive)
 		{
 			ptr->rt_toga_prev = ptr->rt_toga;
-			ptr->rtTogaIsActive = true;
-			XPLMCommandBegin(cmdTable[CMD_RT_TOGA].handle);
+			if (cmdTable[CMD_RT_TOGA].handle != NULL)
+			{
+				ptr->rtTogaIsActive = true;
+				XPLMCommandBegin(cmdTable[CMD_RT_TOGA].handle);
+			}
+			else
+				log_write("Right TO/GA press ignored: command handle is unavailable");
 		}
-		else if (ptr->rt_toga == 0 && ptr->rtTogaIsActive)
+		else if (ptr->rt_toga == 0)
 		{
 			ptr->rt_toga_prev = ptr->rt_toga;
+			if (ptr->rtTogaIsActive && cmdTable[CMD_RT_TOGA].handle != NULL)
+				XPLMCommandEnd(cmdTable[CMD_RT_TOGA].handle);
 			ptr->rtTogaIsActive = false;
-			XPLMCommandEnd(cmdTable[CMD_RT_TOGA].handle);
 		}
 	}
 }
@@ -1756,14 +1854,20 @@ void left_at_disco_handler(void* param)
 		if (ptr->lt_at_disco == 1 && !ptr->ltAtDiscoIsActive)
 		{
 			ptr->lt_at_disco_prev = ptr->lt_at_disco;
-			ptr->ltAtDiscoIsActive = true;
-			XPLMCommandBegin(cmdTable[CMD_LT_AT_DISCO].handle);
+			if (cmdTable[CMD_LT_AT_DISCO].handle != NULL)
+			{
+				ptr->ltAtDiscoIsActive = true;
+				XPLMCommandBegin(cmdTable[CMD_LT_AT_DISCO].handle);
+			}
+			else
+				log_write("Left A/T disconnect press ignored: command handle is unavailable");
 		}
-		else if (ptr->lt_at_disco == 0 && ptr->ltAtDiscoIsActive)
+		else if (ptr->lt_at_disco == 0)
 		{
 			ptr->lt_at_disco_prev = ptr->lt_at_disco;
+			if (ptr->ltAtDiscoIsActive && cmdTable[CMD_LT_AT_DISCO].handle != NULL)
+				XPLMCommandEnd(cmdTable[CMD_LT_AT_DISCO].handle);
 			ptr->ltAtDiscoIsActive = false;
-			XPLMCommandEnd(cmdTable[CMD_LT_AT_DISCO].handle);
 		}
 	}
 }
@@ -1780,14 +1884,20 @@ void right_at_disco_handler(void* param)
 		if (ptr->rt_at_disco == 1 && !ptr->rtAtDiscoIsActive)
 		{
 			ptr->rt_at_disco_prev = ptr->rt_at_disco;
-			ptr->rtAtDiscoIsActive = true;
-			XPLMCommandBegin(cmdTable[CMD_RT_AT_DISCO].handle);
+			if (cmdTable[CMD_RT_AT_DISCO].handle != NULL)
+			{
+				ptr->rtAtDiscoIsActive = true;
+				XPLMCommandBegin(cmdTable[CMD_RT_AT_DISCO].handle);
+			}
+			else
+				log_write("Right A/T disconnect press ignored: command handle is unavailable");
 		}
-		else if (ptr->rt_at_disco == 0 && ptr->rtAtDiscoIsActive)
+		else if (ptr->rt_at_disco == 0)
 		{
 			ptr->rt_at_disco_prev = ptr->rt_at_disco;
+			if (ptr->rtAtDiscoIsActive && cmdTable[CMD_RT_AT_DISCO].handle != NULL)
+				XPLMCommandEnd(cmdTable[CMD_RT_AT_DISCO].handle);
 			ptr->rtAtDiscoIsActive = false;
-			XPLMCommandEnd(cmdTable[CMD_RT_AT_DISCO].handle);
 		}
 	}
 }
@@ -1799,50 +1909,48 @@ void right_at_disco_handler(void* param)
 struct DREF_TABLE drefTable[DREF_END] = 
 {
 	/* CFY TQ specific datarefs */
-	{.datarefName = "laminar/B738/electric/battery_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.battery_on},										// 0	DREF_BATTERY_ON                  FSUIPC offset 0x3102
-	{.datarefName = "sim/time/paused", .handle = NULL, .dataType = XP_INT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.paused},															// 1	DREF_SIM_PAUSED                  FSUIPC offset 0x0264
-	{.datarefName = "sim/flightmodel2/gear/on_ground", .handle = NULL, .dataType = XP_INT, .isArray = true, .arrayOffset = 2, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.on_ground},											// 2	DREF_ON_GROUND                   FSUIPC offset 0x0366
-	{.datarefName = "sim/flightmodel2/position/groundspeed", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.groundspeed_mps},								// 3	DREF_GND_SPEED                   FSUIPC offset 0x02B4
-	{.datarefName = "sim/flightmodel2/position/y_agl", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.radio_altitude_m},									// 4	DREF_RADIO_ALT                   FSUIPC offset 0x31E4
-	{.datarefName = "laminar/B738/parking_brake_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.parking_brake},										// 5	DREF_PARKING_BRAKE               FSUIPC offset 0x0BC8 (read only; release uses CMD_PB_SET)
-	{.datarefName = "sim/cockpit2/controls/left_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.left_brake},									// 6	DREF_LEFT_BRAKE                  FSUIPC offset 0x0BC4
-	{.datarefName = "sim/cockpit2/controls/right_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.right_brake},								// 7	DREF_RIGHT_BRAKE                 FSUIPC offset 0x0BC6
-	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.throttle_ratio_left},			// 8	DREF_THROTTLE_RATIO_LT           FSUIPC offset 0x088C
-	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.throttle_ratio_right},			// 9	DREF_THROTTLE_RATIO_RT           FSUIPC offset 0x0924
-	{.datarefName = "sim/flightmodel/controls/elv_trim", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.elevator_trim},									// 10	DREF_ELEVATOR_TRIM               FSUIPC offset 0x0BC2
-	{.datarefName = "laminar/B738/flt_ctrls/speedbrake_arm", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.speedbrake_armed},								// 11	DREF_SPD_BRAKE_ARM               FSUIPC offset 0x0BCC
-	{.datarefName = "laminar/B738/flt_ctrls/speedbrake_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.speedbrake_lever},							// 12	DREF_SPD_BRAKE_LEVER             FSUIPC offset 0x0BDO
-	{.datarefName = "laminar/B738/autopilot/autothrottle_arm_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.at_arm},								// 13	DREF_AUTO_THROTTLE_ARM           FSUIPC offset 0x0810
-	{.datarefName = "laminar/B738/autopilot/autothrottle_status1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.at_active},								// 14	DREF_AUTO_THROTTLE_ACT           /* no known FSUIPC offset */
-	{.datarefName = "laminar/autopilot/ap_on", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_engaged},												// 15	DREF_AP_ENGAGED                  FSUIPC offset 0x07BC
-	{.datarefName = "laminar/B738/annunciator/parking_brake", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pb_ind_raw},									// 16	DREF_PB_IND_RAW                  FSUIPC offset 0x07BC
-	{.datarefName = "laminar/B738/toggle_switch/ap_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_trimlock_pos},						// 17	DREF_AP_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open 
-	{.datarefName = "laminar/B738/toggle_switch/ap_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_trim_pos},								// 18	DREF_AP_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
-	{.datarefName = "laminar/B738/toggle_switch/el_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.el_trimlock_pos},						// 19	DREF_EL_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open 
-	{.datarefName = "laminar/B738/toggle_switch/el_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.el_trim_pos},								// 20	DREF_EL_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
-	{.datarefName = "laminar/B738/engine/mixture_ratio1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.fuel_cutoff_lt},									// 21	DREF_FUEL_CUTOFF_LT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
-	{.datarefName = "laminar/B738/engine/mixture_ratio2", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.fuel_cutoff_rt},									// 22	DREF_FUEL_CUTOFF_RT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
-	{.datarefName = "laminar/B738/flt_ctrls/flap_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.flaps_lever},										// 23	DREF_FLAPS_LEVER                 FSUIPC offset 0x0BDC
-	{.datarefName = "laminar/B738/switch/capt_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.trim_pos_ca},										// 24	DREF_TRIM_POS_CA                 Captain yoke trim switch: 0/1=direction, 0.5=released
-	{.datarefName = "laminar/B738/switch/fo_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.trim_pos_fo},										// 25	DREF_TRIM_POS_FO                 First Officer yoke trim switch: 0/1=direction, 0.5=released
-	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pfd_speed_mode_ca},								// 26	DREF_PFD_SPD_MODE_CA
-	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pfd_speed_mode_fo},								// 27	DREF_PFD_SPD_MODE_FO
+{.datarefName = "laminar/B738/electric/battery_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.battery_on},										// 0	DREF_BATTERY_ON                  FSUIPC offset 0x3102
+	{.datarefName = "sim/time/paused", .handle = NULL, .dataType = XP_INT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.paused},															// 1	DREF_SIM_PAUSED                  FSUIPC offset 0x0264
+	{.datarefName = "sim/flightmodel2/gear/on_ground", .handle = NULL, .dataType = XP_INT, .isArray = true, .arrayOffset = 2, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.on_ground},											// 2	DREF_ON_GROUND                   FSUIPC offset 0x0366
+	{.datarefName = "sim/flightmodel2/position/groundspeed", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.groundspeed_mps},								// 3	DREF_GND_SPEED                   FSUIPC offset 0x02B4
+	{.datarefName = "sim/flightmodel2/position/y_agl", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.radio_altitude_m},									// 4	DREF_RADIO_ALT                   FSUIPC offset 0x31E4
+	{.datarefName = "laminar/B738/parking_brake_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.parking_brake},										// 5	DREF_PARKING_BRAKE               FSUIPC offset 0x0BC8 (read only; release uses CMD_PB_SET)
+	{.datarefName = "sim/cockpit2/controls/left_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.left_brake},									// 6	DREF_LEFT_BRAKE                  FSUIPC offset 0x0BC4
+	{.datarefName = "sim/cockpit2/controls/right_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.right_brake},								// 7	DREF_RIGHT_BRAKE                 FSUIPC offset 0x0BC6
+	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.throttle_ratio_left},			// 8	DREF_THROTTLE_RATIO_LT           FSUIPC offset 0x088C
+	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.throttle_ratio_right},			// 9	DREF_THROTTLE_RATIO_RT           FSUIPC offset 0x0924
+	{.datarefName = "sim/flightmodel/controls/elv_trim", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.elevator_trim},									// 10	DREF_ELEVATOR_TRIM               FSUIPC offset 0x0BC2
+	{.datarefName = "laminar/B738/flt_ctrls/speedbrake_arm", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.speedbrake_armed},								// 11	DREF_SPD_BRAKE_ARM               FSUIPC offset 0x0BCC
+{.datarefName = "laminar/B738/flt_ctrls/speedbrake_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.speedbrake_lever},							// 12	DREF_SPD_BRAKE_LEVER             FSUIPC offset 0x0BD0
+	{.datarefName = "laminar/B738/autopilot/autothrottle_arm_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.at_arm},								// 13	DREF_AUTO_THROTTLE_ARM           FSUIPC offset 0x0810
+	{.datarefName = "laminar/B738/autopilot/autothrottle_status1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.at_active},								// 14	DREF_AUTO_THROTTLE_ACT           /* no known FSUIPC offset */
+	{.datarefName = "laminar/autopilot/ap_on", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.ap_engaged},												// 15	DREF_AP_ENGAGED                  FSUIPC offset 0x07BC
+	{.datarefName = "laminar/B738/annunciator/parking_brake", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.pb_ind_raw},									// 16	DREF_PB_IND_RAW                  /* no known FSUIPC offset */
+	{.datarefName = "laminar/B738/toggle_switch/ap_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.ap_trimlock_pos},						// 17	DREF_AP_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open
+	{.datarefName = "laminar/B738/toggle_switch/ap_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.ap_trim_pos},								// 18	DREF_AP_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
+	{.datarefName = "laminar/B738/toggle_switch/el_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.el_trimlock_pos},						// 19	DREF_EL_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open
+	{.datarefName = "laminar/B738/toggle_switch/el_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.el_trim_pos},								// 20	DREF_EL_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
+	{.datarefName = "laminar/B738/engine/mixture_ratio1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.fuel_cutoff_lt},									// 21	DREF_FUEL_CUTOFF_LT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
+	{.datarefName = "laminar/B738/engine/mixture_ratio2", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.fuel_cutoff_rt},									// 22	DREF_FUEL_CUTOFF_RT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
+	{.datarefName = "laminar/B738/flt_ctrls/flap_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .ptrVal = (void*)&acData.flaps_lever},										// 23	DREF_FLAPS_LEVER                 FSUIPC offset 0x0BDC
+	{.datarefName = "laminar/B738/switch/capt_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.trim_pos_ca},										// 24	DREF_TRIM_POS_CA                 Captain yoke trim switch: 0/1=direction, 0.5=released
+	{.datarefName = "laminar/B738/switch/fo_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.trim_pos_fo},										// 25	DREF_TRIM_POS_FO                 First Officer yoke trim switch: 0/1=direction, 0.5=released
+	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.pfd_speed_mode_ca},								// 26	DREF_PFD_SPD_MODE_CA
+	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = false, .ptrVal = (void*)&acData.pfd_speed_mode_fo},								// 27	DREF_PFD_SPD_MODE_FO
 };
 
 /* load the command table */
 struct CMD_TABLE cmdTable[CMD_END] =
 {
-	{.commandName = "laminar/B738/autopilot/left_at_dis_press", .handle = NULL},																																														// 0	CMD_LT_AT_DISCO                  Left A/T disconnect button press
-	{.commandName = "laminar/B738/autopilot/right_at_dis_press", .handle = NULL},																																														// 1	CMD_RT_AT_DISCO                  Right A/T disconnect button press
-	{.commandName = "laminar/B738/autopilot/left_toga_press", .handle = NULL},																																															// 2	CMD_LT_TOGA                      Left TO/GA button press
-	{.commandName = "laminar/B738/autopilot/right_toga_press", .handle = NULL},																																															// 3	CMD_RT_TOGA                      Right TO/GA button press
-	{.commandName = "laminar/B738/autopilot/right_toga_press", .handle = NULL},																																															// 4	CMD_GEAR_HORN                    Gear horn warning cutout pushbutton
-	{.commandName = "laminar/B738/alert/gear_horn_cutout", .handle = NULL},																																																// 5	CMD_PB_BRAKE_MAX                 Use as an alternative to directly setting the P/B position
-	{.commandName = "laminar/B738/toggle_switch/el_trim", .handle = NULL},																																																// 6	CMD_EL_TRIM                      Electric trim cutout switch
-	{.commandName = "laminar/B738/toggle_switch/el_trim_lock", .handle = NULL},																																															// 7	CMD_EL_TRIMLOCK                  Electric trim switch lock
-	{.commandName = "laminar/B738/toggle_switch/ap_trim", .handle = NULL},																																																// 8	CMD_AP_TRIM                      A/P trim cutout switch
-	{.commandName = "laminar/B738/toggle_switch/ap_trim_lock", .handle = NULL},																																															// 9	CMD_AP_TRIMLOCK                  A/P trim switch lock
-	{.commandName = "sim/flight_controls/brakes_toggle_max", .handle = NULL},																																															// 10	CMD_PB_SET                       Set parking brake (toggle)
+	{.commandName = "laminar/B738/autopilot/left_at_dis_press", .handle = NULL},       // 0 CMD_LT_AT_DISCO
+	{.commandName = "laminar/B738/autopilot/right_at_dis_press", .handle = NULL},      // 1 CMD_RT_AT_DISCO
+	{.commandName = "laminar/B738/autopilot/left_toga_press", .handle = NULL},          // 2 CMD_LT_TOGA
+	{.commandName = "laminar/B738/autopilot/right_toga_press", .handle = NULL},         // 3 CMD_RT_TOGA
+	{.commandName = "laminar/B738/toggle_switch/el_trim", .handle = NULL},              // 4 CMD_EL_TRIM
+	{.commandName = "laminar/B738/toggle_switch/el_trim_lock", .handle = NULL},         // 5 CMD_EL_TRIMLOCK
+	{.commandName = "laminar/B738/toggle_switch/ap_trim", .handle = NULL},              // 6 CMD_AP_TRIM
+	{.commandName = "laminar/B738/toggle_switch/ap_trim_lock", .handle = NULL},         // 7 CMD_AP_TRIMLOCK
+	{.commandName = "sim/flight_controls/brakes_toggle_max", .handle = NULL},           // 8 CMD_PB_SET
 };
 
 /* find the datarefs and load the drefTable with the opaque handles */
@@ -1874,6 +1982,52 @@ void GetCommandHandles(void)
 		}
 	}
 	RegisterTqTrimCommandHandlers();
+}
+
+/*
+ * Zibo may register custom datarefs and commands after the plane-loaded
+ * notification. Retry only missing handles at a bounded interval so a late
+ * registration recovers without re-registering working command handlers or
+ * flooding the log every flight-loop pass.
+ */
+static void RefreshMissingAircraftHandles(void)
+{
+	float now = XPLMGetElapsedTime();
+	uint16_t index;
+	if (now < g_next_handle_retry_time) return;
+	g_next_handle_retry_time = now + TQ_HANDLE_RETRY_SECONDS;
+
+	for (index = 0; index < DREF_END; ++index)
+	{
+		if (drefTable[index].handle != NULL) continue;
+		drefTable[index].handle = XPLMFindDataRef(drefTable[index].datarefName);
+		if (drefTable[index].handle != NULL)
+			log_write("Recovered late dataref index[%04u] '%s'", index,
+				drefTable[index].datarefName);
+	}
+	for (index = 0; index < CMD_END; ++index)
+	{
+		if (cmdTable[index].handle != NULL) continue;
+		cmdTable[index].handle = XPLMFindCommand(cmdTable[index].commandName);
+		if (cmdTable[index].handle != NULL)
+			log_write("Recovered late command index[%04u] '%s'", index,
+				cmdTable[index].commandName);
+	}
+	for (index = 0; index < (uint16_t)(sizeof(g_trim_command_bindings) /
+		sizeof(g_trim_command_bindings[0])); ++index)
+	{
+		TqTrimCommandBinding* binding = &g_trim_command_bindings[index];
+		if (binding->handle != NULL) continue;
+		binding->handle = XPLMFindCommand(binding->name);
+		if (binding->handle != NULL)
+		{
+			binding->active = 0;
+			XPLMRegisterCommandHandler(binding->handle,
+				tq_trim_command_handler, 1, binding);
+			g_trim_command_handlers_registered = 1;
+			log_write("Recovered late manual trim command '%s'", binding->name);
+		}
+	}
 }
 
 /* get the dataref values from the simulator and into the drefTable */
@@ -1955,8 +2109,14 @@ float GetAircraftDataFLCB(float elapsedMe, float elapsedSim, int counter, void* 
 	/* get the update rate ready to send to X-Plane */
 	float flcbReturn = state->flcbUpdateRate;
 
+	/* Recover Zibo registrations that were not ready at plane-load time. */
+	RefreshMissingAircraftHandles();
+
 	/* get the dataref values and populate the acData structure */
 	GetDataRefValues((void*)state);
+	g_aircraft_data_valid = g_aircraft_active &&
+		drefTable[DREF_BATTERY_ON].handle != NULL &&
+		drefTable[DREF_ON_GROUND].handle != NULL;
 
 	/* adjust data block variables as required */
 	if (acData.pb_ind_raw > 0.0f) acData.pb_indicator = 1; else acData.pb_indicator = 0;			// set the parking brake indicator

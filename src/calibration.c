@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: calibration.c                                                       */
-/*   VERSION: 1.0                                                                 */
+/*   VERSION: 1.0.2                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -111,12 +111,12 @@ int tq_calibration_read(TqCalibration* value)
 		value->lever1_max_position > 4095 || value->lever2_max_position > 4095 ||
 		value->spoiler_max_position > 4095 || value->reverser1_max_position > 4095 ||
 		value->reverser2_max_position > 4095 || value->flaps_max_position > 4095 ||
-		value->lever1_min_position > value->lever1_max_position ||
-		value->lever2_min_position > value->lever2_max_position ||
-		value->spoiler_min_position > value->spoiler_max_position ||
-		value->reverser1_min_position > value->reverser1_max_position ||
-		value->reverser2_min_position > value->reverser2_max_position ||
-		value->flaps_min_position > value->flaps_max_position) 
+		(value->lever1_min_position > value->lever1_max_position || value->lever1_max_position - value->lever1_min_position < 100U) ||
+		(value->lever2_min_position > value->lever2_max_position || value->lever2_max_position - value->lever2_min_position < 100U) ||
+		(value->spoiler_min_position > value->spoiler_max_position || value->spoiler_max_position - value->spoiler_min_position < 100U) ||
+		(value->reverser1_min_position > value->reverser1_max_position || value->reverser1_max_position - value->reverser1_min_position < 100U) ||
+		(value->reverser2_min_position > value->reverser2_max_position || value->reverser2_max_position - value->reverser2_min_position < 100U) ||
+		(value->flaps_min_position > value->flaps_max_position || value->flaps_max_position - value->flaps_min_position < 100U))
 	{
 		log_write("Calibration is incomplete or contains an invalid value");
 		return (0);

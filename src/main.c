@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: main.c                                                              */
-/*   VERSION: 1.0                                                                 */
+/*   VERSION: 1.0.2                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -52,6 +52,7 @@ static int				xPlaneVersion;
 static TqCalibration	g_calibration;
 static PluginConfig		g_config;
 static int				g_started;
+static int				g_enabled;
 static int				g_deferred_callback_registered;
 static int				g_detent_callback_registered;
 static int				g_calibration_required;
@@ -78,9 +79,10 @@ XPLMDataRef				drOnGround;
 
 /* forward declaration of functions */
 bool CheckValidAcf(char* acf_loaded, char* acf_compare);
-float DeferUdpNetSvcStartInit(float elapsedMe, float elapsedSim, int counter, void* refcon);
+float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int counter, void* refcon);
 float UpdateFlightDetentState(float elapsedMe, float elapsedSim, int counter, void* refcon);
 static int WaitForParkingBrakeInterlockRelease(DWORD timeout_ms);
+static void StopOperationalRuntime(void);
 
 #if IBM
 BOOL APIENTRY DllMain(HANDLE module, DWORD reason, LPVOID reserved)
@@ -89,7 +91,6 @@ BOOL APIENTRY DllMain(HANDLE module, DWORD reason, LPVOID reserved)
 	return TRUE;
 }
 #endif
-
 
 /**********************************************************************************/
 /* PLUGIN ENTRY POINT                                                             */
@@ -236,6 +237,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 
 	state->blGblSimulatorRunning = true;
 	g_started = 1;
+	g_enabled = 1;
 
 	return(1);
 }
@@ -245,41 +247,7 @@ PLUGIN_API void XPluginStop(void)
 	if (!g_started) return;
 
 	log_write("xpCFY_TQ plugin stopping.");
-	UnregisterTqTrimCommandHandlers();
-
-	/* Unregister the aircraft callback before clearing its active flag. */
-	if (state && state->blFlcbIsActive)
-	{
-		XPLMUnregisterFlightLoopCallback(GetAircraftDataFLCB, (void*)state);
-		state->blFlcbIsActive = false;
-	}
-	if (state)
-	{
-		state->blGblSimulatorRunning = false;
-		state->blFlcbIsActive = false;
-		state->blFlightModelActive = false;
-		state->blInitRunning = false;
-	}
-	if (g_deferred_callback_registered)
-	{
-		XPLMUnregisterFlightLoopCallback(DeferUdpNetSvcStartInit, NULL);
-		g_deferred_callback_registered = 0;
-	}
-	if (g_detent_callback_registered)
-	{
-		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
-		g_detent_callback_registered = 0;
-	}
-	status_window_shutdown();
-	calibration_window_shutdown();
-	/*
-	 * Retract and confirm the physical interlock while the PoKeys worker is
-	 * still running. The worker has its own final fallback for I/O failures.
-	 */
-	if (!WaitForParkingBrakeInterlockRelease(1500U))
-		log_write("Parking-brake interlock release was not confirmed before worker shutdown");
-	if (!pokeys_thread_stop())
-		log_write("Pokeys worker did not stop cleanly");
+	StopOperationalRuntime();
 	free(state);
 	state = NULL;
 	log_write("xpCFY_TQ stopped");
@@ -289,40 +257,97 @@ PLUGIN_API void XPluginStop(void)
 
 PLUGIN_API void XPluginDisable(void) 
 {
+	if (!g_started || !g_enabled) return;
+	log_write("xpCFY_TQ plugin disabled; stopping operational services");
+	StopOperationalRuntime();
 }
 
 PLUGIN_API int XPluginEnable(void)
 {
+	if (!g_started) return(0);
+	if (g_enabled) return(1);
+
+	if (!pokeys_thread_start(&g_config))
+	{
+		log_write("Unable to restart PoKeys worker while enabling plugin");
+		return(0);
+	}
+	XPLMRegisterFlightLoopCallback(UpdateFlightDetentState, 0.10f, NULL);
+	g_detent_callback_registered = 1;
+	if (!status_window_initialise())
+	{
+		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
+		g_detent_callback_registered = 0;
+		pokeys_thread_stop();
+		return(0);
+	}
+	if (!calibration_window_initialise(&g_calibration, &g_config))
+	{
+		status_window_shutdown();
+		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
+		g_detent_callback_registered = 0;
+		pokeys_thread_stop();
+		return(0);
+	}
+	if (g_calibration_required) calibration_window_begin(1);
+	state->blGblSimulatorRunning = true;
+	state->blFlightModelActive = false;
+	state->blFlcbIsActive = false;
+	state->blInitRunning = true;
+	g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
+	XPLMRegisterFlightLoopCallback(DeferredAircraftInitialisation, 0.10f, (void*)state);
+	g_deferred_callback_registered = 1;
+	g_enabled = 1;
+	log_write("xpCFY_TQ plugin enabled; operational services restarted");
 	return(1);
 }
 
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefcon)
 {
 	(void)from;
-	(void)inRefcon;
-	if (!g_started || state == NULL) return;
+	if (!g_started || !g_enabled || state == NULL) return;
+
+	/* Plane index zero is the user's aircraft; ignore AI aircraft messages. */
+	if ((inMsg == XPLM_MSG_PLANE_LOADED ||
+		inMsg == XPLM_MSG_PLANE_UNLOADED) && (intptr_t)inRefcon != 0)
+		return;
 
 	/*   if a new aircraft is loaded, we need to re-initialise everything   */
 	if (inMsg == XPLM_MSG_PLANE_LOADED)
 	{
 		if (!state->blInitRunning)																	// only run if the initialisation routine is not doing anything
 		{
+			/*
+			 * Stop using the preceding aircraft's handles immediately. X-Plane
+			 * changes the user aircraft before the deferred validation callback,
+			 * so leaving its gatherer active here could write through stale refs.
+			 */
+			ReleaseTqPushbuttonCommands((void*)state);
+			UnregisterTqTrimCommandHandlers();
+			if (state->blFlcbIsActive)
+			{
+				XPLMUnregisterFlightLoopCallback(GetAircraftDataFLCB, (void*)state);
+				state->blFlcbIsActive = false;
+			}
+			TqControlsDeactivate();
+			state->blFlightModelActive = false;
 			g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
 			state->blInitRunning = true;															// set the flag and ...
 			if (!g_deferred_callback_registered)
 			{
-				XPLMRegisterFlightLoopCallback(DeferUdpNetSvcStartInit, (float)0.10, (void*)state);
+				XPLMRegisterFlightLoopCallback(DeferredAircraftInitialisation, (float)0.10, (void*)state);
 				g_deferred_callback_registered = 1;
 			}
 			else
 			{
-				XPLMSetFlightLoopCallbackInterval(DeferUdpNetSvcStartInit, (float)0.10, 1, (void*)state);
+				XPLMSetFlightLoopCallbackInterval(DeferredAircraftInitialisation, (float)0.10, 1, (void*)state);
 			}
 		}
 	}
 
 	if (inMsg == XPLM_MSG_PLANE_UNLOADED)
 	{
+		ReleaseTqPushbuttonCommands((void*)state);
 		UnregisterTqTrimCommandHandlers();
 		pokeys_set_aircraft_in_flight(0);
 		if (state->blFlcbIsActive)
@@ -330,17 +355,56 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefc
 			XPLMUnregisterFlightLoopCallback(GetAircraftDataFLCB, (void*)state);
 			state->blFlcbIsActive = false;
 		}
-		TqControlsReset();
+		TqControlsDeactivate();
+		pokeys_ensure_parking_brake_interlock_retracted();
 		g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
 		if (g_deferred_callback_registered)
 		{
-			XPLMUnregisterFlightLoopCallback(DeferUdpNetSvcStartInit, NULL);
+			XPLMUnregisterFlightLoopCallback(DeferredAircraftInitialisation, NULL);
 			g_deferred_callback_registered = 0;
 		}
 		state->blFlightModelActive = false;
 		state->blInitRunning = false;
 		log_write("Aircraft unloaded; TQ connection remains active.");
 	}
+}
+
+/* Stop all simulator callbacks and hardware activity while the plugin remains loaded. */
+static void StopOperationalRuntime(void)
+{
+	if (!g_enabled) return;
+
+	ReleaseTqPushbuttonCommands((void*)state);
+	UnregisterTqTrimCommandHandlers();
+	if (state && state->blFlcbIsActive)
+	{
+		XPLMUnregisterFlightLoopCallback(GetAircraftDataFLCB, (void*)state);
+		state->blFlcbIsActive = false;
+	}
+	if (g_deferred_callback_registered)
+	{
+		XPLMUnregisterFlightLoopCallback(DeferredAircraftInitialisation, NULL);
+		g_deferred_callback_registered = 0;
+	}
+	if (g_detent_callback_registered)
+	{
+		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
+		g_detent_callback_registered = 0;
+	}
+	if (state)
+	{
+		state->blGblSimulatorRunning = false;
+		state->blFlightModelActive = false;
+		state->blInitRunning = false;
+	}
+	TqControlsDeactivate();
+	status_window_shutdown();
+	calibration_window_shutdown();
+	if (!WaitForParkingBrakeInterlockRelease(1500U))
+		log_write("Parking-brake interlock release was not confirmed before worker shutdown");
+	if (!pokeys_thread_stop())
+		log_write("Pokeys worker exceeded its normal shutdown interval but completed safe cleanup");
+	g_enabled = 0;
 }
 
 float UpdateFlightDetentState(float elapsedMe, float elapsedSim, int counter, void* refcon)
@@ -358,7 +422,7 @@ float UpdateFlightDetentState(float elapsedMe, float elapsedSim, int counter, vo
 	return(0.10f);
 }
 
-float DeferUdpNetSvcStartInit(float elapsedMe, float elapsedSim, int counter, void* refcon)
+float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int counter, void* refcon)
 {
 	char acfDesc[50];																				// aircraft descriptiom
 	char* acfName = "Boeing 737-800X";																// default Zibo filename. anything else is threshold
@@ -382,8 +446,8 @@ float DeferUdpNetSvcStartInit(float elapsedMe, float elapsedSim, int counter, vo
 		return(0);
 	}
 
-	memset(&acfDesc, 0, 50);
-	XPLMGetDatab(drAcfDescription, acfDesc, 0, 50);													// get the loaded aircraft description
+	memset(acfDesc, 0, sizeof(acfDesc));
+	XPLMGetDatab(drAcfDescription, acfDesc, 0, (int)sizeof(acfDesc) - 1);					// preserve a trailing null
 	log_write("Loaded ACF '%s'", acfDesc);
 
 	xPlaneVersion = XPLMGetDatai(drXplaneVersion) / 10000;											// extract the major version number
@@ -404,6 +468,7 @@ float DeferUdpNetSvcStartInit(float elapsedMe, float elapsedSim, int counter, vo
 			/* get dataref and command handles */
 			GetDataRefHandles();																	// load the dataref handles
 			GetCommandHandles();																	// load the command handles
+			TqControlsSetAircraftActive(1);
 
 			/*
 			 * the data gatherer contains First Run synchronization and must not be
@@ -415,8 +480,11 @@ float DeferUdpNetSvcStartInit(float elapsedMe, float elapsedSim, int counter, vo
 			log_write("Aircraft initialisation waiting for parking-brake interlock release confirmation");
 			return(0.05f);
 		}
-		else 
-			state->blFlcbIsActive = false;																	
+		else
+		{
+			state->blFlcbIsActive = false;
+			TqControlsDeactivate();
+		}
 
 		state->blInitRunning = false;																// flag we've finished with the initialisation routines
 	}

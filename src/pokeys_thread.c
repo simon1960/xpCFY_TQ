@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: pokeys_thread.c                                                     */
-/*   VERSION: 1.0                                                                 */
+/*   VERSION: 1.0.2                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -836,7 +836,11 @@ static sPoKeysDevice* connect_usb(PokeysApi* api)
 		if (device_matches(device))
 		{
 			if (!configure_analog_inputs(api, device))
-				log_write("USB connection retained, but lever readings may be unavailable");
+			{
+				log_write("USB connection rejected because closed-loop actuator feedback could not be configured");
+				api->disconnect(device);
+				continue;
+			}
 			if (!configure_actuator_outputs(api, device)) 
 			{
 				log_write("USB connection rejected because the TQ actuators could not be made safe");
@@ -911,7 +915,11 @@ static sPoKeysDevice* connect_network(PokeysApi* api)
 			const char* protocol = devices[index].useUDP ? "UDP" : "TCP";
 			snprintf(ip_address, sizeof(ip_address), "%u.%u.%u.%u",	devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3]);
 			if (!configure_analog_inputs(api, device))
-				log_write("Network connection retained, but lever readings may be unavailable");
+			{
+				log_write("Network connection rejected because closed-loop actuator feedback could not be configured");
+				api->disconnect(device);
+				continue;
+			}
 			if (!configure_actuator_outputs(api, device)) 
 			{
 				log_write("Network connection rejected because the TQ actuators could not be made safe");
@@ -1997,6 +2005,8 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				minmax_feedback_filter_reset(&throttle_right_feedback_filter);
 				stop_trim_motor(&api, device, duty_cycles, 0, &trim_applied_direction);
 				stop_throttle_motors(&api, device, duty_cycles);
+				throttle_left_direction = 2;
+				throttle_right_direction = 2;
 				if (++read_failures == 3U) 
 				{
 					log_write("Three consecutive PoKeys analogue reads failed; lever display is unavailable");
@@ -2119,6 +2129,9 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				api.disconnect(device);
 				device = NULL;
 				connected_over_network = 0;
+				/* A new device has no knowledge of the preceding bridge state. */
+				throttle_left_direction = 2;
+				throttle_right_direction = 2;
 				minmax_feedback_filter_reset(&trim_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_left_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_right_feedback_filter);
@@ -2316,10 +2329,15 @@ int pokeys_thread_stop(void)
 	}
 	if (wait_result != WAIT_OBJECT_0) 
 	{
-		log_write("Pokeys discovery thread required forced termination (wait result %lu)", wait_result);
-		TerminateThread(g_thread, ERROR_TIMEOUT);
-		WaitForSingleObject(g_thread, 1000);
+		/*
+		 * Never terminate a hardware worker asynchronously. Doing so can leave an
+		 * SRW lock held and, more importantly, skip the motor-safe/disconnect path.
+		 * Once cancellation has been requested, wait for cooperative cleanup even
+		 * if the PoKeys DLL takes longer than its advertised timeout.
+		 */
+		log_write("Pokeys worker did not stop within the bounded cancellation period (wait result %lu); waiting for safe cooperative cleanup", wait_result);
 		stopped_cleanly = 0;
+		WaitForSingleObject(g_thread, INFINITE);
 	}
 	CloseHandle(g_thread);
 	CloseHandle(g_stop_event);

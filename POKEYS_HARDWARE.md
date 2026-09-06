@@ -561,7 +561,7 @@ The worker dynamically resolves these 64-bit exports:
 
 | Export | Purpose |
 |---|---|
-| `PK_EnumerateUSBDevices` | Bounded USB discovery |
+| `PK_EnumerateUSBDevices` | Enumerate USB devices; the PoKeys API exposes no per-call timeout |
 | `PK_EnumerateNetworkDevices` | Bounded network discovery |
 | `PK_ConnectToDevice` | Connect to a USB candidate |
 | `PK_ConnectToNetworkDevice` | Connect to a network candidate |
@@ -583,8 +583,8 @@ hardware commands.
 
 | Function | Purpose |
 |---|---|
-| `pokeys_thread_start()` | Load the DLL and start bounded discovery/communication |
-| `pokeys_thread_stop()` | Signal the worker, stop actuators, disconnect, and wait with a timeout |
+| `pokeys_thread_start()` | Load the DLL and start discovery/communication; network discovery is bounded, while the USB enumeration API has no timeout parameter |
+| `pokeys_thread_stop()` | Signal the worker, cancel delayed synchronous I/O if necessary, and wait for safe actuator/device cleanup |
 | `pokeys_get_status()` | Copy connection identity and protocol status |
 | `pokeys_set_network_protocol()` | Select TCP/UDP and safely refresh an active Ethernet connection |
 | `pokeys_get_lever_positions()` | Copy a coherent seven-axis snapshot |
@@ -618,6 +618,10 @@ hardware commands.
 ## Safety and shutdown
 
 - Device calls are serialized on one worker thread.
+- Network enumeration uses the configured discovery timeout. The PoKeys USB
+  enumeration and connect functions expose no timeout parameter; shutdown
+  requests cancellation and then waits for cooperative cleanup rather than
+  terminating the worker while hardware outputs may still be active.
 - Every open-loop actuator command has a bounded duration.
 - Throttle movement additionally requires valid calibrated endpoint feedback.
 - Trim movement requires live analogue feedback and is bounded by the original

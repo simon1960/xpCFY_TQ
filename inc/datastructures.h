@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: datastructures.h                                                    */
-/*   VERSION: 1.0.1                                                               */
+/*   VERSION: 1.0.2                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -26,9 +26,11 @@
  */
 #define XPCFY_TQ_VERSION_MAJOR		1
 #define XPCFY_TQ_VERSION_MINOR		0
-#define XPCFY_TQ_VERSION_MICRO		1
+#define XPCFY_TQ_VERSION_MICRO		2
+
 #define XPCFY_TQ_STRINGIFY_INNER(value)	#value
-#define XPCFY_TQ_STRINGIFY(value)		XPCFY_TQ_STRINGIFY_INNER(value)
+#define XPCFY_TQ_STRINGIFY(value) XPCFY_TQ_STRINGIFY_INNER(value)
+
 #define XPCFY_TQ_VERSION_STRING \
 	XPCFY_TQ_STRINGIFY(XPCFY_TQ_VERSION_MAJOR) "." \
 	XPCFY_TQ_STRINGIFY(XPCFY_TQ_VERSION_MINOR) "." \
@@ -118,7 +120,6 @@ typedef struct TQAircraftData
 /*
  * data types used by X-Plane.
  */
-#define		XP_CHR					1																// char/byte data type
 #define		XP_INT					2																// integer data type
 #define		XP_FLT					3																// float data type
 #define		XP_DBL					4																// double precision data type
@@ -183,12 +184,11 @@ struct DREF_TABLE
 {
 	char*							datarefName;													// linux format dataref string
 	XPLMDataRef						handle;															// dataref handle
-	uint8_t							dataType;														// X-Plane data type - valid values are XP_CHR, XP_INT, XP_FLT and XP_DBL
+	uint8_t							dataType;														// X-Plane data type - valid values are XP_INT, XP_FLT and XP_DBL
 	bool							isArray;														// set true if data is held in an array
 	int								arrayOffset;													// starting offset into array
 	int								arrayCount;														// array counter
 	bool							isWriteable;													// set true if dataref is writeable
-	bool							isEmittable;													// set true if dataref is transmitted to client side app
 	union XP_DTYPE					value;															// received data value from client side app
 	void*							ptrVal;															// pointer to member into aircraft data structure
 };
@@ -204,8 +204,6 @@ typedef enum
 	CMD_RT_AT_DISCO,
 	CMD_LT_TOGA,
 	CMD_RT_TOGA,
-	CMD_GEAR_HORN,
-	CMD_PB_BRAKE_MAX,
 	CMD_EL_TRIM,
 	CMD_EL_TRIMLOCK,
 	CMD_AP_TRIM,

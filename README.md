@@ -1,6 +1,6 @@
 # xpCFY_TQ
 
-`xpCFY_TQ` is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
+`xpCFY_TQ` version 1.0.2 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
 quadrants. It connects X-Plane 12 and the Zibo 737 to CFY TQ V3, V4 and Pro
 hardware through a PoKeys controller.
 
@@ -105,6 +105,23 @@ The log is recreated whenever the plugin starts.
 - `inc/*.h` and `pokeys/*.h` — plugin and PoKeys API declarations.
 - `POKEYS_HARDWARE.md` — hardware and control-logic reference.
 - `plugins/` — ready-to-install 64-bit plugin binaries.
+- `xpCFY_TQ.slnx`, `xpCFY_TQ.vcxproj` and `xpCFY_TQ.vcxproj.filters` — Visual
+  Studio solution and project metadata.
+- `xpCFY_TQ_Acf.conf` — default supported-aircraft configuration copied into
+  the build output when it is not already present.
 
-Build-system, SDK, generated, configuration and development-only files are
-intentionally excluded from the published repository.
+Generated output, user-specific files and the third-party X-Plane SDK remain
+excluded from the repository.
+
+## Building from source
+
+1. Install 64-bit Microsoft Visual Studio with the Desktop development with C++
+   workload.
+2. Download the X-Plane SDK and place its `CHeaders` and `Libraries` directories
+   beneath an `XP_SDK` directory in the repository root.
+3. Open `xpCFY_TQ.slnx`, select **Release** and **x64**, and build the project.
+
+The project produces
+`Release/plugins/xpCFY_TQ/win_x64/xpCFY_TQ.xpl` and copies `PoKeyslib.dll`
+beside it. The `XP_SDK` directory is intentionally ignored so SDK updates do
+not become repository changes.
