@@ -84,12 +84,18 @@ typedef int32_t								(*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
 #define THROTTLE_FAST_DUTY					250000U
 #define THROTTLE_ENDPOINT_TOLERANCE			50U
 #define THROTTLE_LEG_TIMEOUT_MS				15000U
-#define THROTTLE_FOLLOW_DEADBAND			50L
+#define POKEYS_CONTROL_INTERVAL_MS			20U
+#define POKEYS_HEALTH_INTERVAL_CYCLES		50U
+#define THROTTLE_FOLLOW_START_DEADBAND		24L
+#define THROTTLE_FOLLOW_STOP_DEADBAND		8L
 #define THROTTLE_CONSERVATIVE_RANGE			800L
 #define THROTTLE_MEDIUM_RANGE				1200L
 #define THROTTLE_MAX_SPEED_PERCENT			50L
+#define THROTTLE_SYNC_TARGET_TOLERANCE		0.025f
+#define THROTTLE_SYNC_GAIN					160.0f
+#define THROTTLE_SYNC_MAX_CORRECTION		8L
 #define THROTTLE_MANUAL_ERROR_COUNTS		65L
-#define THROTTLE_MANUAL_ERROR_SAMPLES		6
+#define THROTTLE_MANUAL_ERROR_SAMPLES		13
 #define THROTTLE_MANUAL_DRIVE_GRACE_MS		1500U
 #define THROTTLE_MANUAL_COAST_GRACE_MS		1000U
 #define THROTTLE_MANUAL_MIN_DUTY			37500U
@@ -181,7 +187,7 @@ static volatile LONG g_throttle_right_min_speed;
  * thread makes this odd while publishing the two targets, two calibrated
  * minimum speeds and enable state. The PoKeys worker accepts only a matching
  * even value before and after its read, preventing one lever from starting on
- * a new command one 50 ms worker cycle ahead of the other.
+ * a new command one worker cycle ahead of the other.
  */
 static volatile LONG g_throttle_follow_command_sequence;
 static volatile LONG g_throttle_manual_override_mask;
@@ -1481,18 +1487,22 @@ static int detect_throttle_manual_override(int index, LONG target, LONG position
 /*
  * Normal A/T lever following, ported from the .NET throttle governor. The
  * lever positions supplied here use the original twelve-sample MinMax filter.
- * A 50-count final deadband prevents bridge reversals caused by ADC noise and
- * the physical drivetrain's overrun at the target.
+ * Separate start and stop deadbands let a running motor follow small target
+ * increments continuously while preventing a stopped motor from hunting on
+ * ADC noise or drivetrain overrun. This retains the original proportional
+ * governor without the former 50-count catch/stop/catch cycle.
  *
  * The
  * original selects proportional gains of 0.045, 0.06 and 0.5 for errors below
  * 800, below 1200 and at/above 1200 corrected ADC counts.  Calibrated minimum
  * drive is added and output is capped at the original 50 percent maximum.
  *
- * A direction change first coasts the affected bridge for one 50 ms worker
- * pass, exceeding the original controller's 5 ms throttle reversal delay.
- * Both governor inputs are read as one coherent command and both PWM duties
- * are still applied by one PK_PWMUpdateDirectly call.
+ * When both simulator targets are effectively equal, a bounded correction is
+ * applied to their normalised calibrated positions: the leading lever is
+ * slowed and the lagging lever is accelerated. A direction change first
+ * coasts the affected bridge for one worker pass. Both governor inputs are
+ * read as one coherent command and both PWM duties are applied by one
+ * PK_PWMUpdateDirectly call.
  */
 static int throttle_follow_command_snapshot(LONG* enabled, LONG target[2],
 	LONG minimum[2])
@@ -1536,6 +1546,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	uint8_t enable_pin[2] = { THROTTLE_LEFT_ENABLE_PIN, THROTTLE_RIGHT_ENABLE_PIN };
 	uint8_t pwm_channel[2] = { THROTTLE_LEFT_PWM_CHANNEL, THROTTLE_RIGHT_PWM_CHANNEL };
 	uint32_t requested_duty[2] = { 0U, 0U };
+	LONG limit_min[2];
+	LONG limit_max[2];
 	int desired[2] = { 2, 2 };
 	int changed = 0;
 	int i;
@@ -1552,6 +1564,10 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	current[1] = (LONG)right_position;
 	applied[0] = left_direction;
 	applied[1] = right_direction;
+	limit_min[0] = InterlockedCompareExchange(&g_throttle_left_min, 0, 0);
+	limit_max[0] = InterlockedCompareExchange(&g_throttle_left_max, 0, 0);
+	limit_min[1] = InterlockedCompareExchange(&g_throttle_right_min, 0, 0);
+	limit_max[1] = InterlockedCompareExchange(&g_throttle_right_max, 0, 0);
 
 	if (!enabled || InterlockedCompareExchange(&g_throttle_limits_valid, 0, 0) == 0)
 	{
@@ -1573,8 +1589,27 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		LONG speed_percent;
 		float gain;
 
-		if (distance <= THROTTLE_FOLLOW_DEADBAND)
+		/*
+		 * A stopped axis needs a meaningful error before it starts. Once
+		 * running in the requested direction it remains powered down to the
+		 * smaller stop band. Crossing the target always coasts first; a
+		 * reversal is allowed only after the start band is exceeded.
+		 */
+		if (*applied[i] == 2)
+		{
+			if (distance <= THROTTLE_FOLLOW_START_DEADBAND)
+				continue;
+		}
+		else if ((*applied[i] == 1 && error <= 0) ||
+			(*applied[i] == 0 && error >= 0))
+		{
+			if (distance <= THROTTLE_FOLLOW_START_DEADBAND)
+				continue;
+		}
+		else if (distance <= THROTTLE_FOLLOW_STOP_DEADBAND)
+		{
 			continue;
+		}
 		desired[i] = error > 0 ? 1 : 0;
 		gain = distance < THROTTLE_CONSERVATIVE_RANGE ? 0.045f : (distance < THROTTLE_MEDIUM_RANGE ? 0.06f : 0.5f);
 		speed_percent = minimum[i] + (LONG)(gain * (float)distance);
@@ -1583,6 +1618,58 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		if (speed_percent <= minimum[i]) 
 			speed_percent = minimum[i] + 1L;
 		requested_duty[i] = (uint32_t)speed_percent * 5000U;
+	}
+
+	/*
+	 * Correct mechanical left/right speed differences only while X-Plane is
+	 * asking both levers to travel together to matching normalised targets.
+	 * Calibration spans are used because equal raw ADC counts do not represent
+	 * equal lever angles on the two potentiometers.
+	 */
+	if (desired[0] != 2 && desired[0] == desired[1] &&
+		limit_max[0] > limit_min[0] && limit_max[1] > limit_min[1])
+	{
+		float target_normalised[2];
+		float current_normalised[2];
+		float target_difference;
+		float lead;
+		LONG correction;
+		LONG speed_percent[2];
+
+		for (i = 0; i < 2; ++i)
+		{
+			float span = (float)(limit_max[i] - limit_min[i]);
+			target_normalised[i] = ((float)target[i] - (float)limit_min[i]) / span;
+			current_normalised[i] = ((float)current[i] - (float)limit_min[i]) / span;
+			if (target_normalised[i] < 0.0f) target_normalised[i] = 0.0f;
+			if (target_normalised[i] > 1.0f) target_normalised[i] = 1.0f;
+			if (current_normalised[i] < 0.0f) current_normalised[i] = 0.0f;
+			if (current_normalised[i] > 1.0f) current_normalised[i] = 1.0f;
+		}
+		target_difference = target_normalised[0] - target_normalised[1];
+		if (target_difference < 0.0f) target_difference = -target_difference;
+		if (target_difference <= THROTTLE_SYNC_TARGET_TOLERANCE)
+		{
+			/* Positive lead means the left lever is ahead in travel direction. */
+			lead = (current_normalised[0] - current_normalised[1]) *
+				(desired[0] == 1 ? 1.0f : -1.0f);
+			correction = (LONG)(lead * THROTTLE_SYNC_GAIN +
+				(lead >= 0.0f ? 0.5f : -0.5f));
+			if (correction > THROTTLE_SYNC_MAX_CORRECTION)
+				correction = THROTTLE_SYNC_MAX_CORRECTION;
+			if (correction < -THROTTLE_SYNC_MAX_CORRECTION)
+				correction = -THROTTLE_SYNC_MAX_CORRECTION;
+			speed_percent[0] = (LONG)(requested_duty[0] / 5000U) - correction;
+			speed_percent[1] = (LONG)(requested_duty[1] / 5000U) + correction;
+			for (i = 0; i < 2; ++i)
+			{
+				if (speed_percent[i] <= minimum[i])
+					speed_percent[i] = minimum[i] + 1L;
+				if (speed_percent[i] > THROTTLE_MAX_SPEED_PERCENT)
+					speed_percent[i] = THROTTLE_MAX_SPEED_PERCENT;
+				requested_duty[i] = (uint32_t)speed_percent[i] * 5000U;
+			}
+		}
 	}
 
 	/* Detection runs after the governor has selected direction and duty. */
@@ -1828,7 +1915,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 			uint32_t raw[POKEYS_LEVER_COUNT] = { 0 };
 			uint32_t throttle_left_position;
 			uint32_t throttle_right_position;
-			if (WaitForSingleObject(g_stop_event, 50) == WAIT_OBJECT_0) break;
+			if (WaitForSingleObject(g_stop_event, POKEYS_CONTROL_INTERVAL_MS) == WAIT_OBJECT_0) break;
 			process_actuator_commands(&api, device, duty_cycles, &speedbrake_deadline, &parking_brake_deadline);
 			process_parking_brake_indicator(&api, device, &parking_brake_indicator_applied);
 			process_backlight(&api, device, &backlight_applied);
@@ -1959,7 +2046,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 					log_write("Three consecutive reads of trim cutout switch pins %u and %u failed", ELECTRIC_TRIM_NORMAL_SWITCH_PIN, AUTOPILOT_TRIM_NORMAL_SWITCH_PIN);
 				}
 			}
-			if (++health_counter >= 20U) 
+			if (++health_counter >= POKEYS_HEALTH_INTERVAL_CYCLES)
 			{
 				health_counter = 0;
 				if (api.device_data_get(device) == PK_OK) continue;

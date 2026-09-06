@@ -19,7 +19,7 @@
 #include "XPLMDataAccess.h"
 #include "XPLMUtilities.h"
 
-#define	UPDATE_RATE					50															// FLCB updates per second
+#define	UPDATE_RATE					100														// FLCB updates per second
 
 /* TQ calibration fields */
 typedef struct CalibrationField 

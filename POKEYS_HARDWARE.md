@@ -473,8 +473,8 @@ the left and right physical handles to those targets. The complete paired
 command (both targets, both calibrated minimum speeds and the enable state) is
 published with a sequence guard. The PoKeys worker rejects a mixed snapshot
 and applies both PWM duties in one `PK_PWMUpdateDirectly()` call, preventing
-either lever from receiving a new command one 50 ms worker cycle before the
-other. A/T ARM off, loss of all
+either lever from receiving a new command one worker cycle before the other.
+A/T ARM off, loss of all
 qualifying thrust modes, an A/T-disconnect command, or simulator pause releases
 both motors to coast. Before TO/GA and while on the ground, manual throttle
 movement continues to write thrust even when A/T is armed.
@@ -485,25 +485,35 @@ the corresponding Zibo A/T-disconnect command and immediately coasts both
 motors. Manual movement in ARM or THR HLD remains permitted and does not issue
 an A/T-disconnect command.
 The worker follows the original manual-input safeguards: a 65-count error must
-persist for more than six samples after a 1.5-second powered-motor grace period,
-or a settled/coasting lever must move more than 65 counts after a one-second
-grace period. These tests prevent commanded motor travel, drivetrain overrun,
-and ADC noise from being mistaken for pilot input. When no thrust mode owns the
-motors, the flight-loop path uses the same 65-count movement threshold before
-writing the new physical position to X-Plane. A/T ARM off resets the TO/GA
-session and permits a later re-arm.
+persist for approximately 280 ms (14 samples at the 20 ms worker interval)
+after a 1.5-second powered-motor grace period, or a settled/coasting lever must
+move more than 65 counts after a one-second grace period. These tests prevent
+commanded motor travel, drivetrain overrun, and ADC noise from being mistaken
+for pilot input. When no thrust mode owns the motors, the flight-loop path uses
+the same 65-count movement threshold before writing the new physical position
+to X-Plane. A/T ARM off resets the TO/GA session and permits a later re-arm.
 
-The worker applies the original twelve-sample MinMax filter independently to
-each throttle feedback potentiometer, discarding the lowest and highest sample
-before calculating the ten-sample mean used by the motor governor. It then
-ports the original governor bands: proportional gain 0.045 below
-800 counts, 0.06 from 800 through 1199 counts, and 0.5 at 1200 counts or more.
-Each calibrated minimum motor speed is added and output is capped at the
-original 50%. A 50-count final deadband absorbs ADC noise and mechanical
-overrun so a stopped lever does not continually reverse around its target. A
-direction reversal first coasts the bridge for one worker pass. The ten-leg
-ground-test sequencer has priority over normal A/T follow, and analogue feedback
-loss immediately coasts both throttle motors.
+The X-Plane flight-loop callback runs at 100 Hz and publishes each coherent
+left/right target pair to the PoKeys worker. The worker services feedback and
+motor control every 20 ms. It applies the original twelve-sample MinMax filter
+independently to each throttle feedback potentiometer, discarding the lowest
+and highest sample before calculating the ten-sample mean used by the motor
+governor. It then ports the original governor bands: proportional gain 0.045
+below 800 counts, 0.06 from 800 through 1199 counts, and 0.5 at 1200 counts or
+more. Each calibrated minimum motor speed is added and output is capped at the
+original 50%.
+
+Normal following uses an 8-count stop band and a 24-count restart band. A
+moving lever therefore continues through the former 50-count stop/start zone,
+while a stopped lever cannot reverse repeatedly because of ADC noise or
+drivetrain overrun. When both normalised simulator targets are within 2.5%, a
+bounded correction of up to eight PWM percentage points slows the leading
+lever and accelerates the lagging lever. The comparison uses each lever's own
+calibrated travel rather than raw ADC counts. Both corrected PWM values are
+sent in the same `PK_PWMUpdateDirectly` transaction. A direction reversal first
+coasts the bridge for one worker pass. The ten-leg ground-test sequencer has
+priority over normal A/T follow, and analogue feedback loss immediately coasts
+both throttle motors.
 
 ## Throttle test
 
