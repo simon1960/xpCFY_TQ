@@ -120,6 +120,7 @@ typedef struct TQAircraftData
 /*
  * data types used by X-Plane.
  */
+#define		XP_CHR					1																// char/byte data type
 #define		XP_INT					2																// integer data type
 #define		XP_FLT					3																// float data type
 #define		XP_DBL					4																// double precision data type
@@ -184,11 +185,12 @@ struct DREF_TABLE
 {
 	char*							datarefName;													// linux format dataref string
 	XPLMDataRef						handle;															// dataref handle
-	uint8_t							dataType;														// X-Plane data type - valid values are XP_INT, XP_FLT and XP_DBL
+	uint8_t							dataType;														// X-Plane data type - valid values are XP_CHR, XP_INT, XP_FLT and XP_DBL
 	bool							isArray;														// set true if data is held in an array
 	int								arrayOffset;													// starting offset into array
 	int								arrayCount;														// array counter
 	bool							isWriteable;													// set true if dataref is writeable
+	bool							isEmittable;													// set true if dataref is transmitted to client side app
 	union XP_DTYPE					value;															// received data value from client side app
 	void*							ptrVal;															// pointer to member into aircraft data structure
 };
