@@ -17,7 +17,7 @@
 #include "datastructures.h"
 
 /* forward declaration of functions */
-int calibration_window_initialise(TqCalibration* calibration);
+int calibration_window_initialise(TqCalibration* calibration, PluginConfig* config);
 void calibration_window_shutdown(void);
 void calibration_window_show_positions(void);
 void calibration_window_begin(int automatic_request);

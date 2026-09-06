@@ -169,6 +169,14 @@ The `[connection]` value `trim_motor_variant` selects the physical bridge:
 The current development TQ serial 28630 is identified by the original
 application as V4, so newly generated configuration files default to value 4.
 
+The `[connection]` value `network_use_udp` selects the PoKeys Ethernet
+transport: `0` is TCP and `1` is UDP. Missing or invalid values default to TCP.
+The calibration-window **PoKeys network: TCP/UDP** button writes the complete
+configuration atomically. When Ethernet is active, the worker first makes the
+motor outputs safe, disconnects, and rediscovers the controller using the new
+transport. USB remains connected because this setting applies only to PoKeys
+Ethernet sessions.
+
 The writable `sim/flightmodel/controls/elv_trim` dataref provides the simulator
 target and manual-wheel output. Its X-Plane range is mapped to the original
 generic/XPUIPC travel (`-16383..12312`) and then to trim-pot travel
@@ -385,9 +393,10 @@ brake SET** is amber. After a successful set pulse, the colours are reversed.
 Until a command succeeds after connection, both remain amber because the
 hardware provides no position-feedback input for the interlock.
 
-The state buttons use fully opaque backgrounds. Both plugin windows initially
-open centred on the X-Plane screen and can then be dragged. Copyright notices
-are horizontally centred using the measured proportional-font width.
+All button fills use a forced opaque OpenGL path that disables blending,
+enables all RGBA colour channels and writes alpha as 1.0. Both plugin windows
+initially open centred on the X-Plane screen and can then be dragged. Copyright
+notices are horizontally centred using the measured proportional-font width.
 
 ## A/T disconnect buttons
 
@@ -570,6 +579,7 @@ hardware commands.
 | `pokeys_thread_start()` | Load the DLL and start bounded discovery/communication |
 | `pokeys_thread_stop()` | Signal the worker, stop actuators, disconnect, and wait with a timeout |
 | `pokeys_get_status()` | Copy connection identity and protocol status |
+| `pokeys_set_network_protocol()` | Select TCP/UDP and safely refresh an active Ethernet connection |
 | `pokeys_get_lever_positions()` | Copy a coherent seven-axis snapshot |
 | `pokeys_get_parking_brake_input()` | Copy the coherent pin-0 switch snapshot |
 | `pokeys_get_toga_inputs()` | Copy the coherent left/right TO/GA snapshot from pins 1 and 2 |

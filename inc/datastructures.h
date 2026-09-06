@@ -59,6 +59,7 @@ typedef struct PluginConfig
 	uint32_t						trim_motor_variant;											// 3=V3, 4=V4, 5=Pro
 	int								search_usb;
 	int								search_network;
+	int								network_use_udp;											// 0=TCP (default), 1=UDP
 	int								require_cfy_user_id;
 } PluginConfig;
 

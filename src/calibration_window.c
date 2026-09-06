@@ -26,6 +26,7 @@
 #include "calibration_window.h"
 #include "acf_dref.h"
 #include "log.h"
+#include "plugin_config.h"
 #include "pokeys_thread.h"
 
 #define CAL_WINDOW_WIDTH  850
@@ -50,6 +51,7 @@ static const LeverDefinition g_definition[DISPLAYED_LEVERS] =
 
 static XPLMWindowID g_window;
 static TqCalibration* g_calibration;
+static PluginConfig* g_config;
 static TqCalibration g_working;
 static unsigned char g_min_captured[DISPLAYED_LEVERS];
 static unsigned char g_max_captured[DISPLAYED_LEVERS];
@@ -103,6 +105,8 @@ static void draw_opaque_filled_rectangle(int left, int bottom, int right,
 {
 	XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
 	glDisable(GL_BLEND);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glBlendFunc(GL_ONE, GL_ZERO);
 	glColor4f(red, green, blue, 1.00f);
 	glBegin(GL_TRIANGLES);
 	glVertex2i(left, bottom);
@@ -235,7 +239,9 @@ static void draw_button(const char* label, int left, int bottom, int right, int 
 {
 	static float enabled_colour[] = { 1.0f, 1.0f, 1.0f };
 	static float disabled_colour[] = { 0.45f, 0.48f, 0.52f };
-	draw_filled_rectangle(left, bottom, right, top,	enabled ? 0.12f : 0.08f, enabled ? 0.25f : 0.10f, enabled ? 0.34f : 0.12f, 0.92f);
+	draw_opaque_filled_rectangle(left, bottom, right, top,
+		enabled ? 0.12f : 0.08f, enabled ? 0.25f : 0.10f,
+		enabled ? 0.34f : 0.12f);
 	draw_rectangle_outline(left, bottom, right, top, enabled ? 0.30f : 0.22f, enabled ? 0.78f : 0.25f, enabled ? 0.96f : 0.28f, 1.00f);
 	draw_text(label, left + 14, bottom + 8, enabled ? enabled_colour : disabled_colour);
 }
@@ -334,6 +340,11 @@ static void draw_calibration_window(XPLMWindowID window, void* refcon)
 
 	if (g_calibrating) 
 	{
+		char protocol_label[48];
+		snprintf(protocol_label, sizeof(protocol_label), "PoKeys network: %s",
+			g_config && g_config->network_use_udp ? "UDP" : "TCP");
+		draw_button(protocol_label, left + 18, top - 460, left + 250,
+			top - 426, g_config != NULL);
 		draw_button("Save calibration", left + 270, top - 460, left + 420, top - 426, detent_ready && all_captured());
 		draw_button("Cancel", left + 438, top - 460, left + 548, top - 426, 1);
 	} 
@@ -395,6 +406,36 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 		{
 			XPLMSetWindowIsVisible(window, 0);
 			g_calibration_saved = 0;
+		}
+		return (1);
+	}
+
+	/*
+	 * The network protocol is independent of lever capture and can therefore
+	 * be changed while the flight-detent release is still pending. Persist the
+	 * complete configuration before asking the worker to reconnect so a write
+	 * failure never leaves the running and saved selections inconsistent.
+	 */
+	if (g_config && inside(x, y, left + 18, top - 460, left + 250,
+		top - 426))
+	{
+		int previous = g_config->network_use_udp;
+		g_config->network_use_udp = previous ? 0 : 1;
+		if (!plugin_config_write(g_config))
+		{
+			g_config->network_use_udp = previous;
+			strcpy_s(g_message, sizeof(g_message),
+				"Unable to save PoKeys protocol; selection was not changed");
+			log_write("PoKeys network protocol change was not applied because configuration persistence failed");
+		}
+		else
+		{
+			pokeys_set_network_protocol(g_config->network_use_udp);
+			snprintf(g_message, sizeof(g_message),
+				"PoKeys network protocol saved as %s; network connection will refresh",
+				g_config->network_use_udp ? "UDP" : "TCP");
+			log_write("PoKeys network protocol changed to %s from calibration window",
+				g_config->network_use_udp ? "UDP" : "TCP");
 		}
 		return (1);
 	}
@@ -490,11 +531,12 @@ static int handle_wheel(XPLMWindowID window, int x, int y, int wheel, int clicks
 	return (1);
 }
 
-int calibration_window_initialise(TqCalibration* calibration)
+int calibration_window_initialise(TqCalibration* calibration, PluginConfig* config)
 {
 	XPLMCreateWindow_t parameters;
 	int screen_left, screen_top, screen_right, screen_bottom;
 	g_calibration = calibration;
+	g_config = config;
 	memset(&parameters, 0, sizeof(parameters));
 	XPLMGetScreenBoundsGlobal(&screen_left, &screen_top, &screen_right, &screen_bottom);
 	parameters.structSize = sizeof(parameters);
@@ -528,6 +570,7 @@ void calibration_window_shutdown(void)
 	if (g_window) XPLMDestroyWindow(g_window);
 	g_window = NULL;
 	g_calibration = NULL;
+	g_config = NULL;
 }
 
 void calibration_window_show_positions(void)

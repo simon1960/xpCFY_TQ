@@ -106,6 +106,8 @@ int pokeys_thread_start(const PluginConfig* config);
 int pokeys_thread_stop(void);
 int pokeys_is_connected(void);
 void pokeys_get_status(PokeysStatus* status);
+/* Select TCP (0) or UDP (1); an active network connection is rediscovered. */
+void pokeys_set_network_protocol(int use_udp);
 void pokeys_get_lever_positions(PokeysLeverPositions* positions);
 void pokeys_get_parking_brake_input(PokeysParkingBrakeInput* input);
 void pokeys_get_toga_inputs(PokeysTogaInputs* inputs);

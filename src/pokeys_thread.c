@@ -132,6 +132,8 @@ enum ThrottleTestStage
 static HANDLE g_stop_event;
 static HANDLE g_thread;
 static PluginConfig g_config;
+static volatile LONG g_network_use_udp;
+static volatile LONG g_network_protocol_change_requested;
 static volatile LONG g_connected;
 static SRWLOCK g_status_lock = SRWLOCK_INIT;
 static PokeysStatus g_status;
@@ -872,6 +874,9 @@ static sPoKeysDevice* connect_network(PokeysApi* api)
 	{
 		sPoKeysDevice* device;
 		int32_t data_result;
+		/* Discovery reports capability/default state; configuration owns the transport used to connect. */
+		devices[index].useUDP = (uint8_t)(InterlockedCompareExchange(
+			&g_network_use_udp, 0, 0) != 0);
 		log_write("Network candidate %ld: serial %u, summary user ID %u, IP %u.%u.%u.%u, %s",
 			(long)index, devices[index].SerialNumber, devices[index].UserID,
 			devices[index].IPaddress[0], devices[index].IPaddress[1],
@@ -1885,6 +1890,8 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	ULONGLONG throttle_test_deadline = 0;
 	int throttle_left_direction = 2;
 	int throttle_right_direction = 2;
+	int connected_over_network = 0;
+	int reconnect_for_protocol = 0;
 	uint32_t trim_indicator_applied = UINT32_MAX;
 	int trim_applied_direction = 2;
 	int trim_pending_direction = 0;
@@ -1908,13 +1915,34 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	}
 	while (WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0) 
 	{
-		if (!device && g_config.search_usb) device = connect_usb(&api);
-		if (!device && g_config.search_network) device = connect_network(&api);
+		if (!device)
+		{
+			/* A disconnected worker will use the latest protocol on this discovery pass. */
+			InterlockedExchange(&g_network_protocol_change_requested, 0);
+			if (g_config.search_usb)
+			{
+				device = connect_usb(&api);
+				if (device) connected_over_network = 0;
+			}
+			if (!device && g_config.search_network)
+			{
+				device = connect_network(&api);
+				if (device) connected_over_network = 1;
+			}
+		}
 		if (device) 
 		{
 			uint32_t raw[POKEYS_LEVER_COUNT] = { 0 };
 			uint32_t throttle_left_position;
 			uint32_t throttle_right_position;
+			if (InterlockedExchange(&g_network_protocol_change_requested, 0) != 0)
+			{
+				if (connected_over_network)
+					reconnect_for_protocol = 1;
+				else
+					log_write("PoKeys network protocol preference changed to %s; active USB connection retained",
+						InterlockedCompareExchange(&g_network_use_udp, 0, 0) ? "UDP" : "TCP");
+			}
 			if (WaitForSingleObject(g_stop_event, POKEYS_CONTROL_INTERVAL_MS) == WAIT_OBJECT_0) break;
 			process_actuator_commands(&api, device, duty_cycles, &speedbrake_deadline, &parking_brake_deadline);
 			process_parking_brake_indicator(&api, device, &parking_brake_indicator_applied);
@@ -2046,19 +2074,34 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 					log_write("Three consecutive reads of trim cutout switch pins %u and %u failed", ELECTRIC_TRIM_NORMAL_SWITCH_PIN, AUTOPILOT_TRIM_NORMAL_SWITCH_PIN);
 				}
 			}
-			if (++health_counter >= POKEYS_HEALTH_INTERVAL_CYCLES)
+			if (reconnect_for_protocol ||
+				++health_counter >= POKEYS_HEALTH_INTERVAL_CYCLES)
 			{
-				health_counter = 0;
-				if (api.device_data_get(device) == PK_OK) continue;
-				log_write("PoKeys connection health check failed; discovery will resume");
+				if (reconnect_for_protocol)
+				{
+					log_write("Refreshing network PoKeys connection to use %s",
+						InterlockedCompareExchange(&g_network_use_udp, 0, 0) ? "UDP" : "TCP");
+				}
+				else
+				{
+					health_counter = 0;
+					if (api.device_data_get(device) == PK_OK) continue;
+					log_write("PoKeys connection health check failed; discovery will resume");
+				}
 				stop_throttle_motors(&api, device, duty_cycles);
 				stop_trim_motor(&api, device, duty_cycles, 0, &trim_applied_direction);
+				stop_speedbrake_motor(&api, device, duty_cycles);
+				duty_cycles[PARKING_BRAKE_PWM_CHANNEL] = 0U;
+				duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] = 0U;
+				pwm_update(&api, device, duty_cycles,
+					"making actuator outputs safe before disconnect");
 				throttle_test_stage = THROTTLE_TEST_IDLE;
 				throttle_test_deadline = 0;
 				InterlockedExchange(&g_throttle_test_running, 0);
 				throttle_test_status_set("Throttle test unavailable: TQ disconnected");
 				api.disconnect(device);
 				device = NULL;
+				connected_over_network = 0;
 				minmax_feedback_filter_reset(&trim_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_left_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_right_feedback_filter);
@@ -2096,7 +2139,11 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				at_disconnect_inputs_set_disconnected();
 				fuel_cutoff_inputs_set_disconnected();
 				trim_cutout_inputs_set_disconnected();
-				status_set_disconnected("Connection lost; discovery will retry");
+				status_set_disconnected(reconnect_for_protocol ?
+					"Network protocol changed; reconnecting" :
+					"Connection lost; discovery will retry");
+				reconnect_for_protocol = 0;
+				health_counter = 0;
 			}
 		} 
 		else 
@@ -2168,6 +2215,8 @@ int pokeys_thread_start(const PluginConfig* config)
 	if (g_thread) return (1);
 	
 	g_config = *config;
+	InterlockedExchange(&g_network_use_udp, config->network_use_udp ? 1 : 0);
+	InterlockedExchange(&g_network_protocol_change_requested, 0);
 	
 	status_set_disconnected("Waiting for PoKeys connection thread");
 	memset(&g_levers, 0, sizeof(g_levers));
@@ -2268,6 +2317,16 @@ int pokeys_thread_stop(void)
 int pokeys_is_connected(void)
 {
 	return InterlockedCompareExchange(&g_connected, 0, 0) != 0;
+}
+
+/**********************************************************************************/
+/* select the network transport and refresh an active Ethernet connection         */
+/**********************************************************************************/
+void pokeys_set_network_protocol(int use_udp)
+{
+	LONG requested = use_udp ? 1L : 0L;
+	if (InterlockedExchange(&g_network_use_udp, requested) != requested)
+		InterlockedExchange(&g_network_protocol_change_requested, 1);
 }
 
 /**********************************************************************************/

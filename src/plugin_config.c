@@ -30,6 +30,7 @@ void plugin_config_defaults(PluginConfig* config)
     config->trim_motor_variant = 4;
     config->search_usb = 1;
     config->search_network = 1;
+    config->network_use_udp = 0;
     config->require_cfy_user_id = 1;
 }
 
@@ -60,6 +61,7 @@ int plugin_config_read(PluginConfig* config)
     config->trim_motor_variant = ini_uint(path, "trim_motor_variant", config->trim_motor_variant, 3, 5);
     config->search_usb = ini_uint(path, "search_usb", config->search_usb, 0, 1) != 0;
     config->search_network = ini_uint(path, "search_network", config->search_network, 0, 1) != 0;
+    config->network_use_udp = ini_uint(path, "network_use_udp", config->network_use_udp, 0, 1) != 0;
     config->require_cfy_user_id = ini_uint(path, "require_cfy_user_id", config->require_cfy_user_id, 0, 1) != 0;
     log_write("Configuration loaded from %s", path);
     return(1);
@@ -85,7 +87,7 @@ int plugin_config_write(const PluginConfig* config)
     
     fprintf(stream, "# xpCFY_TQ hardware connection settings\n[connection]\n");
     fprintf(stream, "preferred_serial=%u\n", config->preferred_serial);
-    fprintf(stream, "search_usb=%d\nsearch_network=%d\nrequire_cfy_user_id=%d\n", config->search_usb, config->search_network, config->require_cfy_user_id);
+    fprintf(stream, "search_usb=%d\nsearch_network=%d\nnetwork_use_udp=%d\nrequire_cfy_user_id=%d\n", config->search_usb, config->search_network, config->network_use_udp, config->require_cfy_user_id);
     fprintf(stream, "network_timeout_ms=%u\nretry_delay_ms=%u\ndiscovery_timeout_ms=%u\n", config->network_timeout_ms, config->retry_delay_ms, config->discovery_timeout_ms);
     fprintf(stream, "trim_motor_variant=%u\n", config->trim_motor_variant);
     write_ok = fflush(stream) == 0 && !ferror(stream);

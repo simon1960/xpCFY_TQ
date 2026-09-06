@@ -74,6 +74,12 @@ Calibration can be repeated later from the **xpCFY_TQ > TQ Calibration** item
 in X-Plane's Plugins menu. The status and live-position windows are available
 from the same menu.
 
+The calibration window also contains a **PoKeys network: TCP/UDP** toggle.
+TCP is the default. Selecting the button saves the new transport in
+`xpCFY_TQ.cfg`; an active Ethernet connection is safely closed and rediscovered
+with the selected protocol. An active USB connection is left unchanged, but
+the saved choice is used for the next Ethernet connection.
+
 The plugin creates its runtime files beside `xpCFY_TQ.xpl`:
 
 - `xpCFY_TQ.calibration.cfg` — saved hardware calibration.

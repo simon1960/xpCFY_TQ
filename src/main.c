@@ -220,7 +220,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 		log_shutdown();
 		return(0);
 	}
-	if (!calibration_window_initialise(&g_calibration))
+	if (!calibration_window_initialise(&g_calibration, &g_config))
 	{
 		log_write("Lever positions/calibration window could not be created");
 		status_window_shutdown();
