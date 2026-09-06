@@ -469,7 +469,12 @@ position instead of being suppressed by a stale change-detection cache.
 While simulator ownership is active, the per-engine
 `throttle_jet_rev_ratio` values are clamped to the forward range 0.0..1.0 and
 mapped to each throttle's saved ADC endpoints. PWM channels 5 and 4 then drive
-the left and right physical handles to those targets. A/T ARM off, loss of all
+the left and right physical handles to those targets. The complete paired
+command (both targets, both calibrated minimum speeds and the enable state) is
+published with a sequence guard. The PoKeys worker rejects a mixed snapshot
+and applies both PWM duties in one `PK_PWMUpdateDirectly()` call, preventing
+either lever from receiving a new command one 50 ms worker cycle before the
+other. A/T ARM off, loss of all
 qualifying thrust modes, an A/T-disconnect command, or simulator pause releases
 both motors to coast. Before TO/GA and while on the ground, manual throttle
 movement continues to write thrust even when A/T is armed.

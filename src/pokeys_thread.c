@@ -176,6 +176,14 @@ static volatile LONG g_throttle_left_target;
 static volatile LONG g_throttle_right_target;
 static volatile LONG g_throttle_left_min_speed;
 static volatile LONG g_throttle_right_min_speed;
+/*
+ * Even values identify a complete paired throttle-follow command. The X-Plane
+ * thread makes this odd while publishing the two targets, two calibrated
+ * minimum speeds and enable state. The PoKeys worker accepts only a matching
+ * even value before and after its read, preventing one lever from starting on
+ * a new command one 50 ms worker cycle ahead of the other.
+ */
+static volatile LONG g_throttle_follow_command_sequence;
 static volatile LONG g_throttle_manual_override_mask;
 static SRWLOCK g_throttle_test_status_lock = SRWLOCK_INIT;
 static char g_throttle_test_status[128] = "Throttle test ready";
@@ -1483,10 +1491,43 @@ static int detect_throttle_manual_override(int index, LONG target, LONG position
  *
  * A direction change first coasts the affected bridge for one 50 ms worker
  * pass, exceeding the original controller's 5 ms throttle reversal delay.
+ * Both governor inputs are read as one coherent command and both PWM duties
+ * are still applied by one PK_PWMUpdateDirectly call.
  */
+static int throttle_follow_command_snapshot(LONG* enabled, LONG target[2],
+	LONG minimum[2])
+{
+	int attempt;
+
+	/*
+	 * Publication comprises only five interlocked stores, so a collision should
+	 * normally resolve on the next read. If it does not, the caller coasts both
+	 * motors rather than acting on a mixed command.
+	 */
+	for (attempt = 0; attempt < 8; ++attempt)
+	{
+		LONG sequence_before = InterlockedCompareExchange(
+			&g_throttle_follow_command_sequence, 0, 0);
+		LONG sequence_after;
+
+		if ((sequence_before & 1L) != 0) continue;
+		target[0] = InterlockedCompareExchange(&g_throttle_left_target, 0, 0);
+		target[1] = InterlockedCompareExchange(&g_throttle_right_target, 0, 0);
+		minimum[0] = InterlockedCompareExchange(&g_throttle_left_min_speed, 0, 0);
+		minimum[1] = InterlockedCompareExchange(&g_throttle_right_min_speed, 0, 0);
+		*enabled = InterlockedCompareExchange(&g_throttle_follow_enabled, 0, 0);
+		sequence_after = InterlockedCompareExchange(
+			&g_throttle_follow_command_sequence, 0, 0);
+		if (sequence_before == sequence_after &&
+			(sequence_after & 1L) == 0)
+			return(1);
+	}
+	return(0);
+}
+
 static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t left_position, uint32_t right_position, int* left_direction, int* right_direction)
 {
-	LONG enabled = InterlockedCompareExchange(&g_throttle_follow_enabled, 0, 0);
+	LONG enabled;
 	LONG target[2];
 	LONG current[2];
 	LONG minimum[2];
@@ -1500,12 +1541,15 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	int i;
 	ULONGLONG now = GetTickCount64();
 
-	target[0] = InterlockedCompareExchange(&g_throttle_left_target, 0, 0);
-	target[1] = InterlockedCompareExchange(&g_throttle_right_target, 0, 0);
+	if (!throttle_follow_command_snapshot(&enabled, target, minimum))
+	{
+		stop_throttle_motors(api, device, duty_cycles);
+		*left_direction = 2;
+		*right_direction = 2;
+		return;
+	}
 	current[0] = (LONG)left_position;
 	current[1] = (LONG)right_position;
-	minimum[0] = InterlockedCompareExchange(&g_throttle_left_min_speed, 0, 0);
-	minimum[1] = InterlockedCompareExchange(&g_throttle_right_min_speed, 0, 0);
 	applied[0] = left_direction;
 	applied[1] = right_direction;
 
@@ -2074,6 +2118,7 @@ int pokeys_thread_start(const PluginConfig* config)
 	InterlockedExchange(&g_throttle_right_target, 0);
 	InterlockedExchange(&g_throttle_left_min_speed, 0);
 	InterlockedExchange(&g_throttle_right_min_speed, 0);
+	InterlockedExchange(&g_throttle_follow_command_sequence, 0);
 	InterlockedExchange(&g_throttle_manual_override_mask, 0);
 	memset(g_throttle_manual_monitor, 0, sizeof(g_throttle_manual_monitor));
 	throttle_test_status_set("Throttle test ready");
@@ -2356,11 +2401,27 @@ void pokeys_set_throttle_follow_targets(uint32_t left_position,
 	if (right_position > 4095U) right_position = 4095U;
 	if (left_min_speed > 49U) left_min_speed = 49U;
 	if (right_min_speed > 49U) right_min_speed = 49U;
+	/* Avoid contending with the worker when the complete command is unchanged. */
+	if (InterlockedCompareExchange(&g_throttle_left_target, 0, 0) ==
+		(LONG)left_position &&
+		InterlockedCompareExchange(&g_throttle_right_target, 0, 0) ==
+		(LONG)right_position &&
+		InterlockedCompareExchange(&g_throttle_left_min_speed, 0, 0) ==
+		(LONG)left_min_speed &&
+		InterlockedCompareExchange(&g_throttle_right_min_speed, 0, 0) ==
+		(LONG)right_min_speed &&
+		InterlockedCompareExchange(&g_throttle_follow_enabled, 0, 0) ==
+		(enabled ? 1L : 0L))
+		return;
+	/* Mark publication in progress before changing either side of the pair. */
+	InterlockedIncrement(&g_throttle_follow_command_sequence);
 	InterlockedExchange(&g_throttle_left_target, (LONG)left_position);
 	InterlockedExchange(&g_throttle_right_target, (LONG)right_position);
 	InterlockedExchange(&g_throttle_left_min_speed, (LONG)left_min_speed);
 	InterlockedExchange(&g_throttle_right_min_speed, (LONG)right_min_speed);
 	InterlockedExchange(&g_throttle_follow_enabled, enabled ? 1 : 0);
+	/* Publish the complete pair with the next even sequence value. */
+	InterlockedIncrement(&g_throttle_follow_command_sequence);
 }
 
 void pokeys_set_throttle_test_limits(uint32_t left_min, uint32_t left_max, uint32_t right_min, uint32_t right_max)
