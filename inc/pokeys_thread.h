@@ -144,9 +144,10 @@ void pokeys_set_trim_indicator_target(uint32_t position, int simulator_owned);
 void pokeys_set_trim_min_speed(uint32_t percent);
 int pokeys_trim_motor_is_running(void);
 /*
- * Publish calibrated raw-ADC throttle targets for normal A/T operation.
- * The worker owns all PoKeys PWM/direction I/O; the X-Plane thread only
- * supplies targets and whether simulator-follow currently owns the levers.
+ * Publish 0..4095 corrected-position throttle targets for normal A/T
+ * operation. The worker normalises each ADC feedback value to the same domain
+ * and owns all PoKeys PWM/direction I/O; the X-Plane thread only supplies
+ * targets and whether simulator-follow currently owns the levers.
  */
 void pokeys_set_throttle_follow_targets(uint32_t left_position,
 	uint32_t right_position, uint32_t left_min_speed,

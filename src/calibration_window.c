@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: calibration_window.c                                                */
-/*   VERSION: 1.0                                                                 */
+/*   VERSION: 1.0.1                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -22,6 +22,7 @@
 #include "XPLMGraphics.h"
 
 /* project include files */
+#include "datastructures.h"
 #include "calibration.h"
 #include "calibration_window.h"
 #include "acf_dref.h"
@@ -364,7 +365,7 @@ static void draw_calibration_window(XPLMWindowID window, void* refcon)
 	if (!g_calibrating)
 		draw_button("Close", left + 365, top - 452, left + 485, top - 418, !pokeys_is_throttle_test_running());
 
-	draw_centred_text("xpCFY_TQ Version 1.0 - Copyright (c) 2026 S.W. Grainger.", left, right, top - 505, copyright_colour);
+	draw_centred_text(XPCFY_TQ_COPYRIGHT_STRING, left, right, top - 505, copyright_colour);
 }
 
 static int inside(int x, int y, int left, int bottom, int right, int top)

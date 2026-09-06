@@ -1540,6 +1540,25 @@ static int throttle_follow_command_snapshot(LONG* enabled, LONG target[2],
 	return(0);
 }
 
+/*
+ * Match DC_motorController.CorrectedPos() from the original application.
+ * Each potentiometer has different electrical endpoints, so raw counts must
+ * be scaled to the common 0..4095 lever-travel domain before governor gains,
+ * deadbands or manual-intervention thresholds are applied.
+ */
+static LONG corrected_throttle_position(LONG raw_position, LONG minimum,
+	LONG maximum)
+{
+	LONGLONG numerator;
+	LONG span;
+
+	if (maximum <= minimum || raw_position <= minimum) return(0L);
+	if (raw_position >= maximum) return(4095L);
+	span = maximum - minimum;
+	numerator = (LONGLONG)(raw_position - minimum) * 4095LL;
+	return((LONG)((numerator + span / 2L) / span));
+}
+
 static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t left_position, uint32_t right_position, int* left_direction, int* right_direction)
 {
 	LONG enabled;
@@ -1565,8 +1584,6 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		*right_direction = 2;
 		return;
 	}
-	current[0] = (LONG)left_position;
-	current[1] = (LONG)right_position;
 	applied[0] = left_direction;
 	applied[1] = right_direction;
 	limit_min[0] = InterlockedCompareExchange(&g_throttle_left_min, 0, 0);
@@ -1586,6 +1603,11 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		}
 		return;
 	}
+
+	current[0] = corrected_throttle_position((LONG)left_position,
+		limit_min[0], limit_max[0]);
+	current[1] = corrected_throttle_position((LONG)right_position,
+		limit_min[1], limit_max[1]);
 
 	for (i = 0; i < 2; ++i)
 	{
@@ -1627,9 +1649,9 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 
 	/*
 	 * Correct mechanical left/right speed differences only while X-Plane is
-	 * asking both levers to travel together to matching normalised targets.
-	 * Calibration spans are used because equal raw ADC counts do not represent
-	 * equal lever angles on the two potentiometers.
+	 * asking both levers to travel together to matching targets. Both target
+	 * and feedback values are already in the original common 0..4095 corrected
+	 * domain, so their fractions represent lever angle rather than raw voltage.
 	 */
 	if (desired[0] != 2 && desired[0] == desired[1] &&
 		limit_max[0] > limit_min[0] && limit_max[1] > limit_min[1])
@@ -1643,13 +1665,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 
 		for (i = 0; i < 2; ++i)
 		{
-			float span = (float)(limit_max[i] - limit_min[i]);
-			target_normalised[i] = ((float)target[i] - (float)limit_min[i]) / span;
-			current_normalised[i] = ((float)current[i] - (float)limit_min[i]) / span;
-			if (target_normalised[i] < 0.0f) target_normalised[i] = 0.0f;
-			if (target_normalised[i] > 1.0f) target_normalised[i] = 1.0f;
-			if (current_normalised[i] < 0.0f) current_normalised[i] = 0.0f;
-			if (current_normalised[i] > 1.0f) current_normalised[i] = 1.0f;
+			target_normalised[i] = (float)target[i] / 4095.0f;
+			current_normalised[i] = (float)current[i] / 4095.0f;
 		}
 		target_difference = target_normalised[0] - target_normalised[1];
 		if (target_difference < 0.0f) target_difference = -target_difference;

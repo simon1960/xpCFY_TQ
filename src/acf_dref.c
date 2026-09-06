@@ -1607,9 +1607,12 @@ static void ProcessTqLeverWrites(void)
 }
 
 /*
- * Convert the simulator's current 0..1 forward-thrust ratios to each lever's
- * calibrated ADC travel.  This runs every FLCB pass (not only on an ADC
- * change), so a TO/GA/FMC target reaches the PoKeys worker immediately.
+ * Convert the simulator's current 0..1 forward-thrust ratios to the common
+ * 0..4095 corrected-position domain used by the original .NET governor. The
+ * PoKeys worker converts each filtered ADC reading from its individual
+ * calibration span into the same domain before calculating error. This runs
+ * every FLCB pass (not only on an ADC change), so a TO/GA/FMC target reaches
+ * both throttle governors as one coherent pair immediately.
  */
 static void ProcessTqThrottleMotorFollow(void)
 {
@@ -1633,12 +1636,8 @@ static void ProcessTqThrottleMotorFollow(void)
 	enabled = TqAutothrottleOwnsLevers() && acData.paused == 0;
 	left = clamp_unit(acData.throttle_ratio_left);
 	right = clamp_unit(acData.throttle_ratio_right);
-	left_target = g_control_calibration.lever1_min_position +
-		(uint32_t)(left * (float)(g_control_calibration.lever1_max_position -
-			g_control_calibration.lever1_min_position) + 0.5f);
-	right_target = g_control_calibration.lever2_min_position +
-		(uint32_t)(right * (float)(g_control_calibration.lever2_max_position -
-			g_control_calibration.lever2_min_position) + 0.5f);
+	left_target = (uint32_t)(left * 4095.0f + 0.5f);
+	right_target = (uint32_t)(right * 4095.0f + 0.5f);
 	pokeys_set_throttle_follow_targets(left_target, right_target,
 		g_control_calibration.lever1_min_speed,
 		g_control_calibration.lever2_min_speed, enabled);

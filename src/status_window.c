@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: status_window.c                                                     */
-/*   VERSION: 1.0                                                                 */
+/*   VERSION: 1.0.1                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -21,6 +21,7 @@
 #include "XPLMMenus.h"
 
 /* project include files */
+#include "datastructures.h"
 #include "pokeys_thread.h"
 #include "calibration_window.h"
 #include "status_window.h"
@@ -90,7 +91,7 @@ static void draw_status_window(XPLMWindowID window, void* refcon)
 
 	draw_field("Status detail:", status.detail, left + 24, top - 202);
 
-	draw_centred_text("xpCFY_TQ Version 1.0 - Copyright (c) 2026 S.W. Grainger.", left, right, top - 270, copyright_colour);
+	draw_centred_text(XPCFY_TQ_COPYRIGHT_STRING, left, right, top - 270, copyright_colour);
 }
 
 /**********************************************************************************/

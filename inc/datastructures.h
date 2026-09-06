@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: datastructures.h                                                    */
-/*   VERSION: 1.0                                                                 */
+/*   VERSION: 1.0.1                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -18,6 +18,24 @@
 /* X-Plane SDK include files */
 #include "XPLMDataAccess.h"
 #include "XPLMUtilities.h"
+
+/*
+ * Plugin release version. Keep the three numeric components as the single
+ * source of truth; XPCFY_TQ_VERSION_STRING is assembled at preprocessing time
+ * for UI text and any future diagnostic output.
+ */
+#define XPCFY_TQ_VERSION_MAJOR		1
+#define XPCFY_TQ_VERSION_MINOR		0
+#define XPCFY_TQ_VERSION_MICRO		1
+#define XPCFY_TQ_STRINGIFY_INNER(value)	#value
+#define XPCFY_TQ_STRINGIFY(value)		XPCFY_TQ_STRINGIFY_INNER(value)
+#define XPCFY_TQ_VERSION_STRING \
+	XPCFY_TQ_STRINGIFY(XPCFY_TQ_VERSION_MAJOR) "." \
+	XPCFY_TQ_STRINGIFY(XPCFY_TQ_VERSION_MINOR) "." \
+	XPCFY_TQ_STRINGIFY(XPCFY_TQ_VERSION_MICRO)
+#define XPCFY_TQ_COPYRIGHT_STRING \
+	"xpCFY_TQ Version " XPCFY_TQ_VERSION_STRING \
+	" - Copyright (c) 2026 S.W. Grainger."
 
 #define	UPDATE_RATE					100														// FLCB updates per second
 

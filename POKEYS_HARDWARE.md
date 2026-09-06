@@ -477,12 +477,18 @@ position instead of being suppressed by a stale change-detection cache.
 
 While simulator ownership is active, the per-engine
 `throttle_jet_rev_ratio` values are clamped to the forward range 0.0..1.0 and
-mapped to each throttle's saved ADC endpoints. PWM channels 5 and 4 then drive
-the left and right physical handles to those targets. The complete paired
-command (both targets, both calibrated minimum speeds and the enable state) is
-published with a sequence guard. The PoKeys worker rejects a mixed snapshot
-and applies both PWM duties in one `PK_PWMUpdateDirectly()` call, preventing
-either lever from receiving a new command one worker cycle before the other.
+mapped to the shared 0..4095 corrected-position scale. After the original
+twelve-sample MinMax filtering, each physical ADC reading is independently
+mapped from its saved MIN/MAX endpoints to that same 0..4095 scale. This
+reproduces the original application's `CorrectedPos()` processing, so equal
+simulator thrust commands represent equal angular lever positions even when
+the two potentiometers have different raw spans. PWM channels 5 and 4 then
+drive the left and right physical handles to those corrected targets. The
+complete paired command (both targets, both calibrated minimum speeds and the
+enable state) is published with a sequence guard. The PoKeys worker rejects a
+mixed snapshot and applies both PWM duties in one `PK_PWMUpdateDirectly()`
+call, preventing either lever from receiving a new command one worker cycle
+before the other.
 A/T ARM off, loss of all
 qualifying thrust modes, an A/T-disconnect command, or simulator pause releases
 both motors to coast. Before TO/GA and while on the ground, manual throttle
@@ -506,19 +512,20 @@ The X-Plane flight-loop callback runs at 100 Hz and publishes each coherent
 left/right target pair to the PoKeys worker. The worker services feedback and
 motor control every 20 ms. It applies the original twelve-sample MinMax filter
 independently to each throttle feedback potentiometer, discarding the lowest
-and highest sample before calculating the ten-sample mean used by the motor
-governor. It then ports the original governor bands: proportional gain 0.045
-below 800 counts, 0.06 from 800 through 1199 counts, and 0.5 at 1200 counts or
-more. Each calibrated minimum motor speed is added and output is capped at the
-original 50%.
+and highest sample before calculating the ten-sample mean. The filtered value
+is then converted to corrected 0..4095 travel before entering the governor.
+The original governor bands therefore operate in their intended domain:
+proportional gain 0.045 below 800 corrected counts, 0.06 from 800 through 1199
+counts, and 0.5 at 1200 counts or more. Each calibrated minimum motor speed is
+added and output is capped at the original 50%.
 
 Normal following uses an 8-count stop band and a 24-count restart band. A
 moving lever therefore continues through the former 50-count stop/start zone,
 while a stopped lever cannot reverse repeatedly because of ADC noise or
 drivetrain overrun. When both normalised simulator targets are within 2.5%, a
 bounded correction of up to eight PWM percentage points slows the leading
-lever and accelerates the lagging lever. The comparison uses each lever's own
-calibrated travel rather than raw ADC counts. Both corrected PWM values are
+lever and accelerates the lagging lever. The comparison uses corrected angular
+travel rather than raw ADC counts. Both corrected PWM values are
 sent in the same `PK_PWMUpdateDirectly` transaction. A direction reversal first
 coasts the bridge for one worker pass. The ten-leg ground-test sequencer has
 priority over normal A/T follow, and analogue feedback loss immediately coasts
