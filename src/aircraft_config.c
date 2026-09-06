@@ -48,7 +48,13 @@ static int write_default_config(void)
 	if (fprintf(stream,
 		"# Simon's Flight Simulation Avionics\n"
 		"# Valid aircraft tail numbers for xpCFY_TQ; one per line\n"
-		"ZB738\n") < 0) {
+		"ZB738\n"
+		"B736\n"
+		"B737\n"
+		"B738\n"
+		"B739\n"
+		) < 0)
+	{
 		fclose(stream);
 		DeleteFileA(temporary);
 		log_write("Unable to write aircraft configuration defaults");

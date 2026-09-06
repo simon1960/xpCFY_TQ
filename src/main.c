@@ -384,6 +384,7 @@ float DeferUdpNetSvcStartInit(float elapsedMe, float elapsedSim, int counter, vo
 
 	memset(&acfDesc, 0, 50);
 	XPLMGetDatab(drAcfDescription, acfDesc, 0, 50);													// get the loaded aircraft description
+	log_write("Loaded ACF '%s'", acfDesc);
 
 	xPlaneVersion = XPLMGetDatai(drXplaneVersion) / 10000;											// extract the major version number
 	if (xPlaneVersion == 12)
@@ -448,7 +449,7 @@ bool CheckValidAcf(char* acf_loaded, char* acf_compare)
 
 	if (returned_size <= 0 || !aircraft_config_contains_tail_number(tail_number))
 	{
-		log_write("Unsupported aircraft loaded - data services now in standby.");
+		log_write("Unsupported aircraft loaded - Tailnumber is \"%s\". Data services now in standby.", tail_number);
 		return(false);
 	}
 
