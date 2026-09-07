@@ -19,15 +19,13 @@ All notable changes to `xpCFY_TQ` are recorded here.
   unresponsive PoKeys controller after the motors are already safe.
 - Persisted the Ethernet selection as `network_protocol=TCP|UDP`, retained the
   legacy numeric setting, added automatic migration, and verified each save.
-- Updated all source release banners and runtime copyright strings to 1.0.3.
+
 
 ## 1.0.2 - 2026-09-06
 
 - Hardened plugin enable, disable, aircraft-change, command-handler and PoKeys
   worker lifecycle handling.
-- Restored the X-Plane character-data type and dataref emission metadata.
 - Added source-file and line-number information to diagnostic log entries.
-- Published updated hardware/control documentation and installable binaries.
 
 ## 1.0.1 - 2026-09-06
 
@@ -42,5 +40,4 @@ All notable changes to `xpCFY_TQ` are recorded here.
 - Initial 64-bit X-Plane 12 plugin release for CFY TQ V3, V4 and Pro hardware.
 - Implemented PoKeys discovery/connection, calibration, live/status windows,
   throttles, reversers, TO/GA, A/T disconnect, fuel cutoff, speedbrake, parking
-  brake, stabilizer trim, flap control, backlighting and first-run synchronisation.
-- Added the packaged `xpCFY_TQ.xpl` and `PoKeyslib.dll` installation files.
+  brake, stabiliser trim, flap control, backlighting and first-run synchronisation.
