@@ -91,45 +91,33 @@ static void draw_rectangle_outline(int left, int bottom, int right, int top,
 	glEnd();
 }
 
-static void draw_button(const char* label, int left, int bottom, int right,
-	int top, int enabled)
+static void draw_button(const char* label, int left, int bottom, int right, int top, int enabled)
 {
 	static float text_colour[] = { 1.0f, 1.0f, 1.0f };
-	draw_opaque_filled_rectangle(left, bottom, right, top,
-		enabled ? 0.12f : 0.08f, enabled ? 0.25f : 0.10f,
-		enabled ? 0.34f : 0.12f);
-	draw_rectangle_outline(left, bottom, right, top,
-		enabled ? 0.30f : 0.22f, enabled ? 0.78f : 0.25f,
-		enabled ? 0.96f : 0.28f);
+	draw_opaque_filled_rectangle(left, bottom, right, top, enabled ? 0.12f : 0.08f, enabled ? 0.25f : 0.10f, enabled ? 0.34f : 0.12f);
+	draw_rectangle_outline(left, bottom, right, top, enabled ? 0.30f : 0.22f, enabled ? 0.78f : 0.25f, enabled ? 0.96f : 0.28f);
 	draw_centred_text(label, left, right, bottom + 8, text_colour);
 }
 
-static void draw_state_button(const char* label, int left, int bottom,
-	int right, int top, int enabled, int selected)
+static void draw_state_button(const char* label, int left, int bottom, int right, int top, int enabled, int selected)
 {
 	static float text_colour[] = { 1.0f, 1.0f, 1.0f };
 	if (!enabled)
 	{
-		draw_opaque_filled_rectangle(left, bottom, right, top,
-			0.08f, 0.10f, 0.12f);
-		draw_rectangle_outline(left, bottom, right, top,
-			0.22f, 0.25f, 0.28f);
+		draw_opaque_filled_rectangle(left, bottom, right, top, 0.08f, 0.10f, 0.12f);
+		draw_rectangle_outline(left, bottom, right, top, 0.22f, 0.25f, 0.28f);
 		draw_centred_text(label, left, right, bottom + 8, text_colour);
 		return;
 	}
 	if (selected)
 	{
-		draw_opaque_filled_rectangle(left, bottom, right, top,
-			0.00f, 0.78f, 0.16f);
-		draw_rectangle_outline(left, bottom, right, top,
-			0.45f, 1.00f, 0.55f);
+		draw_opaque_filled_rectangle(left, bottom, right, top, 0.00f, 0.78f, 0.16f);
+		draw_rectangle_outline(left, bottom, right, top, 0.45f, 1.00f, 0.55f);
 	}
 	else
 	{
-		draw_opaque_filled_rectangle(left, bottom, right, top,
-			1.00f, 0.58f, 0.00f);
-		draw_rectangle_outline(left, bottom, right, top,
-			1.00f, 0.82f, 0.30f);
+		draw_opaque_filled_rectangle(left, bottom, right, top, 1.00f, 0.58f, 0.00f);
+		draw_rectangle_outline(left, bottom, right, top, 1.00f, 0.82f, 0.30f);
 	}
 	draw_centred_text(label, left, right, bottom + 8, text_colour);
 }
@@ -152,74 +140,45 @@ static void draw_configuration_window(XPLMWindowID window, void* refcon)
 	(void)refcon;
 
 	pokeys_get_lever_positions(&positions);
-	pokeys_get_throttle_test_status(throttle_status,
-		(uint32_t)sizeof(throttle_status));
+	pokeys_get_throttle_test_status(throttle_status, (uint32_t)sizeof(throttle_status));
 	tests_allowed = TqGroundTestControlsAllowed();
 	parking_brake_state = pokeys_get_parking_brake_state();
-	if (positions.valid && g_calibration &&
-		g_calibration->spoiler_max_position >
-		g_calibration->spoiler_min_position)
+	if (positions.valid && g_calibration &&	g_calibration->spoiler_max_position > g_calibration->spoiler_min_position)
 	{
 		uint32_t value = positions.value[POKEYS_LEVER_SPEED_BRAKE];
 		uint32_t minimum = g_calibration->spoiler_min_position;
 		uint32_t maximum = g_calibration->spoiler_max_position;
 		/* State colouring uses the same bounded raw-position test as before. */
 		speedbrake_retracted = value <= minimum + 75U;
-		speedbrake_extended = value >=
-			maximum - (maximum >= 75U ? 75U : maximum);
+		speedbrake_extended = value >= maximum - (maximum >= 75U ? 75U : maximum);
 	}
 
 	XPLMGetWindowGeometry(window, &left, &top, &right, &bottom);
-	draw_text("TQ general configuration", left + 20, top - 35,
-		heading_colour);
-	draw_text(g_message, left + 20, top - 60,
-		g_message_warning ? warning_colour : normal_colour);
+	draw_text("TQ general configuration", left + 20, top - 35, heading_colour);
+	draw_text(g_message, left + 20, top - 60, g_message_warning ? warning_colour : normal_colour);
 
-	draw_text("Throttle quadrant variant", left + 20, top - 100,
-		label_colour);
-	draw_state_button("V3", left + 20, top - 145, left + 210, top - 111,
-		1, g_working_variant == 3U);
-	draw_state_button("V4", left + 230, top - 145, left + 420, top - 111,
-		1, g_working_variant == 4U);
-	draw_state_button("Pro", left + 440, top - 145, left + 630, top - 111,
-		1, g_working_variant == 5U);
+	draw_text("Throttle quadrant variant", left + 20, top - 100, label_colour);
+	draw_state_button("CFY TQ Ver 3", left + 20, top - 145, left + 210, top - 111, 1, g_working_variant == 3U);
+	draw_state_button("CFY TQ Ver 4", left + 230, top - 145, left + 420, top - 111,	1, g_working_variant == 4U);
+	draw_state_button("CFY TQ Ver 4 Pro", left + 440, top - 145, left + 630, top - 111,	1, g_working_variant == 5U);
 
-	draw_text("PoKeys network protocol", left + 20, top - 185,
-		label_colour);
-	snprintf(protocol_label, sizeof(protocol_label), "PoKeys network: %s",
-		g_working_use_udp ? "UDP" : "TCP");
-	draw_button(protocol_label, left + 20, top - 230, left + 250,
-		top - 196, g_config != NULL);
+	draw_text("PoKeys network protocol", left + 20, top - 185, label_colour);
+	snprintf(protocol_label, sizeof(protocol_label), "PoKeys network: %s", g_working_use_udp ? "UDP" : "TCP");
+	draw_button(protocol_label, left + 20, top - 230, left + 250, top - 196, g_config != NULL);
 
-	draw_text("Ground hardware tests", left + 20, top - 270,
-		label_colour);
+	draw_text("Ground hardware tests", left + 20, top - 270, label_colour);
 	if (!tests_allowed)
-		draw_text("Controls require battery OFF and aircraft on the ground.",
-			left + 220, top - 270, warning_colour);
-	draw_state_button("Speedbrake DOWN", left + 20, top - 315,
-		left + 220, top - 281, tests_allowed && positions.connected,
-		speedbrake_retracted);
-	draw_state_button("Speedbrake UP", left + 240, top - 315,
-		left + 440, top - 281, tests_allowed && positions.connected,
-		speedbrake_extended);
-	draw_state_button("Park brake RELEASE", left + 20, top - 360,
-		left + 220, top - 326, tests_allowed && positions.connected,
-		parking_brake_state == POKEYS_PARKING_BRAKE_RELEASED);
-	draw_state_button("Park brake SET", left + 240, top - 360,
-		left + 440, top - 326, tests_allowed && positions.connected,
-		parking_brake_state == POKEYS_PARKING_BRAKE_SET);
-	draw_button("Test Throttles", left + 20, top - 405, left + 270,
-		top - 371, tests_allowed && positions.connected &&
-		!pokeys_is_throttle_test_running());
-	draw_text(throttle_status, left + 20, top - 430,
-		pokeys_is_throttle_test_running() ? warning_colour : normal_colour);
+		draw_text("Controls require battery OFF and aircraft on the ground.", left + 220, top - 270, warning_colour);
+	draw_state_button("Speedbrake DOWN", left + 20, top - 315, left + 220, top - 281, tests_allowed && positions.connected, speedbrake_retracted);
+	draw_state_button("Speedbrake UP", left + 240, top - 315, left + 440, top - 281, tests_allowed && positions.connected, speedbrake_extended);
+	draw_state_button("Park brake RELEASE", left + 20, top - 360, left + 220, top - 326, tests_allowed && positions.connected, parking_brake_state == POKEYS_PARKING_BRAKE_RELEASED);
+	draw_state_button("Park brake SET", left + 240, top - 360, left + 440, top - 326, tests_allowed && positions.connected,	parking_brake_state == POKEYS_PARKING_BRAKE_SET);
+	draw_button("Test Throttles", left + 20, top - 405, left + 270,	top - 371, tests_allowed && positions.connected && !pokeys_is_throttle_test_running());
+	draw_text(throttle_status, left + 20, top - 430, pokeys_is_throttle_test_running() ? warning_colour : normal_colour);
 
-	draw_button("Save", left + 275, top - 480, left + 395, top - 446,
-		g_config != NULL);
-	draw_button("Close", left + 415, top - 480, left + 535, top - 446,
-		!pokeys_is_throttle_test_running());
-	draw_centred_text(XPCFY_TQ_COPYRIGHT_STRING, left, right, top - 525,
-		copyright_colour);
+	draw_button("Save", left + 275, top - 480, left + 395, top - 446, g_config != NULL);
+	draw_button("Close", left + 415, top - 480, left + 535, top - 446, !pokeys_is_throttle_test_running());
+	draw_centred_text(XPCFY_TQ_COPYRIGHT_STRING, left, right, top - 525, copyright_colour);
 }
 
 static int inside(int x, int y, int left, int bottom, int right, int top)
@@ -246,8 +205,7 @@ static void save_configuration(void)
 		g_config->trim_motor_variant = previous_variant;
 		g_config->network_use_udp = previous_protocol;
 		g_message_warning = 1;
-		strcpy_s(g_message, sizeof(g_message),
-			"Unable to save configuration; selections were not applied.");
+		strcpy_s(g_message, sizeof(g_message), "Unable to save configuration; selections were not applied.");
 		log_write("General TQ configuration persistence failed");
 		return;
 	}
@@ -259,16 +217,13 @@ static void save_configuration(void)
 		pokeys_set_trim_motor_variant(g_working_variant);
 	g_message_warning = 0;
 	if (variant_changed || protocol_changed)
-		strcpy_s(g_message, sizeof(g_message),
-			"Configuration saved; changed hardware settings are being applied.");
+		strcpy_s(g_message, sizeof(g_message), "Configuration saved; changed hardware settings are being applied.");
 	else
 		strcpy_s(g_message, sizeof(g_message), "Configuration saved.");
-	log_write("General TQ configuration saved: variant V%u, protocol %s",
-		g_working_variant, g_working_use_udp ? "UDP" : "TCP");
+	log_write("General TQ configuration saved: variant V%u, protocol %s", g_working_variant, g_working_use_udp ? "UDP" : "TCP");
 }
 
-static int handle_mouse(XPLMWindowID window, int x, int y,
-	XPLMMouseStatus mouse, void* refcon)
+static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse, void* refcon)
 {
 	int left, top, right, bottom;
 	int tests_allowed;
@@ -300,60 +255,38 @@ static int handle_mouse(XPLMWindowID window, int x, int y,
 	{
 		g_working_use_udp = !g_working_use_udp;
 		g_message_warning = 0;
-		snprintf(g_message, sizeof(g_message),
-			"PoKeys %s selected; select Save to apply.",
-			g_working_use_udp ? "UDP" : "TCP");
+		snprintf(g_message, sizeof(g_message), "PoKeys %s selected; select Save to apply.",	g_working_use_udp ? "UDP" : "TCP");
 	}
-	else if (tests_allowed && inside(x, y, left + 20, top - 315,
-		left + 220, top - 281))
+	else if (tests_allowed && inside(x, y, left + 20, top - 315, left + 220, top - 281))
+	{
+		strcpy_s(g_message, sizeof(g_message), pokeys_speedbrake_retract_and_pull_down() ? "Speedbrake retract/pull-down requested; flight detent released first." : "Speedbrake command unavailable: TQ is not connected.");
+	}
+	else if (tests_allowed && inside(x, y, left + 240, top - 315, left + 440, top - 281))
+	{
+		strcpy_s(g_message, sizeof(g_message), pokeys_speedbrake_push_up_and_extend() ?	"Speedbrake push-up/full-extension requested; flight detent released first." : "Speedbrake command unavailable: TQ is not connected.");
+	}
+	else if (tests_allowed && inside(x, y, left + 20, top - 360, left + 220, top - 326))
+	{
+		strcpy_s(g_message, sizeof(g_message), pokeys_parking_brake_interlock_release() ? "Parking-brake interlock release requested." : "Parking-brake command unavailable: TQ is not connected.");
+	}
+	else if (tests_allowed && inside(x, y, left + 240, top - 360, left + 440, top - 326))
 	{
 		strcpy_s(g_message, sizeof(g_message),
-			pokeys_speedbrake_retract_and_pull_down() ?
-			"Speedbrake retract/pull-down requested; flight detent released first." :
-			"Speedbrake command unavailable: TQ is not connected.");
+			pokeys_parking_brake_interlock_set() ? "Parking-brake interlock set requested." : "Parking-brake command unavailable: TQ is not connected.");
 	}
-	else if (tests_allowed && inside(x, y, left + 240, top - 315,
-		left + 440, top - 281))
+	else if (tests_allowed && inside(x, y, left + 20, top - 405, left + 270, top - 371))
 	{
-		strcpy_s(g_message, sizeof(g_message),
-			pokeys_speedbrake_push_up_and_extend() ?
-			"Speedbrake push-up/full-extension requested; flight detent released first." :
-			"Speedbrake command unavailable: TQ is not connected.");
+		strcpy_s(g_message, sizeof(g_message), pokeys_start_throttle_test() ? "Throttle test started; keep the quadrant clear." : "Throttle test unavailable: check connection, calibration, or running test.");
 	}
-	else if (tests_allowed && inside(x, y, left + 20, top - 360,
-		left + 220, top - 326))
-	{
-		strcpy_s(g_message, sizeof(g_message),
-			pokeys_parking_brake_interlock_release() ?
-			"Parking-brake interlock release requested." :
-			"Parking-brake command unavailable: TQ is not connected.");
-	}
-	else if (tests_allowed && inside(x, y, left + 240, top - 360,
-		left + 440, top - 326))
-	{
-		strcpy_s(g_message, sizeof(g_message),
-			pokeys_parking_brake_interlock_set() ?
-			"Parking-brake interlock set requested." :
-			"Parking-brake command unavailable: TQ is not connected.");
-	}
-	else if (tests_allowed && inside(x, y, left + 20, top - 405,
-		left + 270, top - 371))
-	{
-		strcpy_s(g_message, sizeof(g_message), pokeys_start_throttle_test() ?
-			"Throttle test started; keep the quadrant clear." :
-			"Throttle test unavailable: check connection, calibration, or running test.");
-	}
-	else if (inside(x, y, left + 275, top - 480,
-		left + 395, top - 446))
+	else if (inside(x, y, left + 275, top - 480, left + 395, top - 446))
 	{
 		save_configuration();
 	}
-	else if (!pokeys_is_throttle_test_running() && inside(x, y,
-		left + 415, top - 480, left + 535, top - 446))
+	else if (!pokeys_is_throttle_test_running() && inside(x, y, left + 415, top - 480, left + 535, top - 446))
 	{
 		XPLMSetWindowIsVisible(window, 0);
 	}
-	return 1;
+	return(1);
 }
 
 static void handle_key(XPLMWindowID window, char key, XPLMKeyFlags flags,
