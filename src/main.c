@@ -318,8 +318,8 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefc
 		if (!state->blInitRunning)																	// only run if the initialisation routine is not doing anything
 		{
 			/*
-			 * Stop using the preceding aircraft's handles immediately. X-Plane
-			 * changes the user aircraft before the deferred validation callback,
+			 * stop using the preceding aircraft's dataref and command handles immediately.
+			 * X-Plane changes the user aircraft before the deferred validation callback,
 			 * so leaving its gatherer active here could write through stale refs.
 			 */
 			ReleaseTqPushbuttonCommands((void*)state);
@@ -329,6 +329,7 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefc
 				XPLMUnregisterFlightLoopCallback(GetAircraftDataFLCB, (void*)state);
 				state->blFlcbIsActive = false;
 			}
+
 			TqControlsDeactivate();
 			state->blFlightModelActive = false;
 			g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
@@ -369,7 +370,10 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefc
 	}
 }
 
-/* Stop all simulator callbacks and hardware activity while the plugin remains loaded. */
+/*!
+ * stop all simulator callbacks and hardware activity when
+ * the plugin is stop or disabled by X-Plane.
+ */
 static void StopOperationalRuntime(void)
 {
 	if (!g_enabled) return;
@@ -407,6 +411,9 @@ static void StopOperationalRuntime(void)
 	g_enabled = 0;
 }
 
+/*!
+ * speedbrake stuff
+ */
 float UpdateFlightDetentState(float elapsedMe, float elapsedSim, int counter, void* refcon)
 {
 	int in_flight = 0;
@@ -422,10 +429,14 @@ float UpdateFlightDetentState(float elapsedMe, float elapsedSim, int counter, vo
 	return(0.10f);
 }
 
+/*!
+ * an aircraft has been loaded, so we can go ahead and start
+ * the initialisation properly.
+ */
 float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int counter, void* refcon)
 {
 	char acfDesc[50];																				// aircraft descriptiom
-	char* acfName = "Boeing 737-800X";																// default Zibo filename. anything else is threshold
+	char* acfName = "Boeing 737-800X";																// default Zibo filename. anything else is probably Threshold LU
 
 	state_table_p state = (state_table_p)refcon;
 
@@ -447,7 +458,7 @@ float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int coun
 	}
 
 	memset(acfDesc, 0, sizeof(acfDesc));
-	XPLMGetDatab(drAcfDescription, acfDesc, 0, (int)sizeof(acfDesc) - 1);					// preserve a trailing null
+	XPLMGetDatab(drAcfDescription, acfDesc, 0, (int)sizeof(acfDesc) - 1);							// preserve a trailing null
 	log_write("Loaded ACF '%s'", acfDesc);
 
 	xPlaneVersion = XPLMGetDatai(drXplaneVersion) / 10000;											// extract the major version number
@@ -468,6 +479,7 @@ float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int coun
 			/* get dataref and command handles */
 			GetDataRefHandles();																	// load the dataref handles
 			GetCommandHandles();																	// load the command handles
+
 			TqControlsSetAircraftActive(1);
 
 			/*

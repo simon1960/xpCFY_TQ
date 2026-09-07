@@ -1153,25 +1153,17 @@ static void ProcessTqTrim(void)
 		return;
 	}
 
-	physical_position = positions.sequence != g_last_trim_sequence ?
-		moving_average_add(&g_trim_filter,
-			(float)positions.value[POKEYS_LEVER_TRIM]) :
-		g_last_trim_position;
+	physical_position = positions.sequence != g_last_trim_sequence ? moving_average_add(&g_trim_filter, (float)positions.value[POKEYS_LEVER_TRIM]) : g_last_trim_position;
 	simulator_before = acData.elevator_trim;
 	/* Treat the animated/numeric Zibo value as engaged only at its ON detent. */
 	autopilot_engaged = acData.ap_engaged >= 0.5;
 	motor_running = pokeys_trim_motor_is_running();
 	manual_direction = g_manual_trim_command_direction;
 	if (manual_direction == 0)
-		manual_direction = manual_trim_direction_from_datarefs(
-			simulator_before - g_last_simulator_trim,
-			&trim_datarefs_available);
+		manual_direction = manual_trim_direction_from_datarefs(simulator_before - g_last_simulator_trim, &trim_datarefs_available);
 	else
-		trim_datarefs_available =
-			drefTable[DREF_TRIM_POS_CA].handle != NULL ||
-			drefTable[DREF_TRIM_POS_FO].handle != NULL;
-	if (!g_trim_dataref_input_initialised ||
-		manual_direction != g_last_trim_dataref_direction)
+		trim_datarefs_available = drefTable[DREF_TRIM_POS_CA].handle != NULL ||	drefTable[DREF_TRIM_POS_FO].handle != NULL;
+	if (!g_trim_dataref_input_initialised || manual_direction != g_last_trim_dataref_direction)
 	{
 		log_write("Manual trim input: Captain=%.1f First Officer=%.1f, request=%s, source=%s",
 			acData.trim_pos_ca, acData.trim_pos_fo,
@@ -1204,8 +1196,7 @@ static void ProcessTqTrim(void)
 		uint32_t target_position = simulator_trim_to_position(simulator_before);
 		float distance = physical_position - (float)target_position;
 		if (distance < 0.0f) distance = -distance;
-		motor_allowed = acData.paused == 0 && acData.battery_on != 0.0 &&
-			acData.ap_trim_pos < 0.5f && acData.el_trim_pos < 0.5f;
+		motor_allowed = acData.paused == 0 && acData.battery_on != 0.0 && acData.ap_trim_pos < 0.5f && acData.el_trim_pos < 0.5f;
 		pokeys_set_trim_manual_command(0, 0);
 		pokeys_set_trim_indicator_target(target_position, 1);
 		pokeys_set_trim_target(target_position, motor_allowed);
@@ -1216,8 +1207,7 @@ static void ProcessTqTrim(void)
 		{
 			g_trim_first_run_active = 0;
 			pokeys_set_trim_indicator_target(target_position, 0);
-			first_run_component_complete(TQ_FIRST_RUN_TRIM_POSITION,
-				"trim wheel and trim indicator from simulator position");
+			first_run_component_complete(TQ_FIRST_RUN_TRIM_POSITION, "trim wheel and trim indicator from simulator position");
 		}
 		return;
 	}
@@ -1942,8 +1932,8 @@ struct DREF_TABLE drefTable[DREF_END] =
 /* load the command table */
 struct CMD_TABLE cmdTable[CMD_END] =
 {
-	{.commandName = "laminar/B738/autopilot/left_at_dis_press", .handle = NULL},       // 0 CMD_LT_AT_DISCO
-	{.commandName = "laminar/B738/autopilot/right_at_dis_press", .handle = NULL},      // 1 CMD_RT_AT_DISCO
+	{.commandName = "laminar/B738/autopilot/left_at_dis_press", .handle = NULL},        // 0 CMD_LT_AT_DISCO
+	{.commandName = "laminar/B738/autopilot/right_at_dis_press", .handle = NULL},       // 1 CMD_RT_AT_DISCO
 	{.commandName = "laminar/B738/autopilot/left_toga_press", .handle = NULL},          // 2 CMD_LT_TOGA
 	{.commandName = "laminar/B738/autopilot/right_toga_press", .handle = NULL},         // 3 CMD_RT_TOGA
 	{.commandName = "laminar/B738/toggle_switch/el_trim", .handle = NULL},              // 4 CMD_EL_TRIM
