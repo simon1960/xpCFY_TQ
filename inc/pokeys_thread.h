@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: pokeys_thread.h                                                     */
-/*   VERSION: 1.0.2                                                                 */
+/*   VERSION: 1.0.3                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -116,6 +116,8 @@ void pokeys_get_fuel_cutoff_inputs(PokeysFuelCutoffInputs* inputs);
 void pokeys_get_trim_cutout_inputs(PokeysTrimCutoutInputs* inputs);
 void pokeys_set_parking_brake_indicator(int illuminated);
 void pokeys_set_backlight(int illuminated);
+/* Suspend simulator-driven polling and motor control while no aircraft is loaded. */
+void pokeys_set_simulator_aircraft_active(int active);
 void pokeys_set_aircraft_in_flight(int in_flight);
 void pokeys_set_calibration_active(int active);
 int pokeys_is_flight_detent_retracted(void);

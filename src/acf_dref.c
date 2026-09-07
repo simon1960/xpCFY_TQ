@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: acf_dref.c                                                          */
-/*   VERSION: 1.0.2                                                                 */
+/*   VERSION: 1.0.3                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -630,6 +630,12 @@ void TqControlsSetAircraftActive(int active)
 {
 	uint16_t index;
 	g_aircraft_active = active != 0;
+	/*
+	 * Keep the independent PoKeys worker in the same lifecycle state. This is
+	 * published before dataref handles are cleared so the worker can coast any
+	 * simulator-owned motors and stop polling an aircraft that is being unloaded.
+	 */
+	pokeys_set_simulator_aircraft_active(g_aircraft_active);
 	g_aircraft_data_valid = 0;
 	if (g_aircraft_active) return;
 

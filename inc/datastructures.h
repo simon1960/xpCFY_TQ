@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: datastructures.h                                                    */
-/*   VERSION: 1.0.2                                                               */
+/*   VERSION: 1.0.3                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -26,7 +26,7 @@
  */
 #define XPCFY_TQ_VERSION_MAJOR		1
 #define XPCFY_TQ_VERSION_MINOR		0
-#define XPCFY_TQ_VERSION_MICRO		2
+#define XPCFY_TQ_VERSION_MICRO		3
 
 #define XPCFY_TQ_STRINGIFY_INNER(value)	#value
 #define XPCFY_TQ_STRINGIFY(value) XPCFY_TQ_STRINGIFY_INNER(value)

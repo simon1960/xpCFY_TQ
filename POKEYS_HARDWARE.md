@@ -169,13 +169,16 @@ The `[connection]` value `trim_motor_variant` selects the physical bridge:
 The current development TQ serial 28630 is identified by the original
 application as V4, so newly generated configuration files default to value 4.
 
-The `[connection]` value `network_use_udp` selects the PoKeys Ethernet
-transport: `0` is TCP and `1` is UDP. Missing or invalid values default to TCP.
+The `[connection]` value `network_protocol` selects the PoKeys Ethernet
+transport and is stored as `TCP` or `UDP`. Missing or invalid values default to
+TCP. The legacy numeric `network_use_udp` value (`0` for TCP, `1` for UDP) is
+still read for compatibility. On startup, an older configuration is rewritten
+with both keys so its effective selection becomes explicit and persistent.
 The calibration-window **PoKeys network: TCP/UDP** button writes the complete
-configuration atomically. When Ethernet is active, the worker first makes the
-motor outputs safe, disconnects, and rediscovers the controller using the new
-transport. USB remains connected because this setting applies only to PoKeys
-Ethernet sessions.
+configuration atomically and verifies the saved protocol before applying it.
+When Ethernet is active, the worker first makes the motor outputs safe,
+disconnects, and rediscovers the controller using the new transport. USB
+remains connected because this setting applies only to PoKeys Ethernet sessions.
 
 The writable `sim/flightmodel/controls/elv_trim` dataref provides the simulator
 target and manual-wheel output. Its X-Plane range is mapped to the original
@@ -485,10 +488,11 @@ simulator thrust commands represent equal angular lever positions even when
 the two potentiometers have different raw spans. PWM channels 5 and 4 then
 drive the left and right physical handles to those corrected targets. The
 complete paired command (both targets, both calibrated minimum speeds and the
-enable state) is published with a sequence guard. The PoKeys worker rejects a
-mixed snapshot and applies both PWM duties in one `PK_PWMUpdateDirectly()`
-call, preventing either lever from receiving a new command one worker cycle
-before the other.
+enable state) is published with a sequence guard. If the 100 Hz publisher is
+pre-empted part-way through an update, the PoKeys worker retains the preceding
+coherent command for one pass rather than momentarily coasting the motors. It
+applies both PWM duties in one `PK_PWMUpdateDirectly()` call, preventing either
+lever from receiving a new command one worker cycle before the other.
 A/T ARM off, loss of all
 qualifying thrust modes, an A/T-disconnect command, or simulator pause releases
 both motors to coast. Before TO/GA and while on the ground, manual throttle
@@ -500,7 +504,7 @@ the corresponding Zibo A/T-disconnect command and immediately coasts both
 motors. Manual movement in ARM or THR HLD remains permitted and does not issue
 an A/T-disconnect command.
 The worker follows the original manual-input safeguards: a 65-count error must
-persist for approximately 280 ms (14 samples at the 20 ms worker interval)
+persist for approximately 280 ms (seven samples at the 40 ms worker interval)
 after a 1.5-second powered-motor grace period, or a settled/coasting lever must
 move more than 65 counts after a one-second grace period. These tests prevent
 commanded motor travel, drivetrain overrun, and ADC noise from being mistaken
@@ -510,26 +514,39 @@ to X-Plane. A/T ARM off resets the TO/GA session and permits a later re-arm.
 
 The X-Plane flight-loop callback runs at 100 Hz and publishes each coherent
 left/right target pair to the PoKeys worker. The worker services feedback and
-motor control every 20 ms. It applies the original twelve-sample MinMax filter
+motor control every 40 ms, matching the original application's PoKeys polling
+interval and avoiding command saturation on a network controller. It applies
+the original twelve-sample MinMax filter
 independently to each throttle feedback potentiometer, discarding the lowest
 and highest sample before calculating the ten-sample mean. The filtered value
 is then converted to corrected 0..4095 travel before entering the governor.
 The original governor bands therefore operate in their intended domain:
-proportional gain 0.045 below 800 corrected counts, 0.06 from 800 through 1199
-counts, and 0.5 at 1200 counts or more. Each calibrated minimum motor speed is
+proportional gain 0.045 below 1000 corrected counts, 0.06 from 1000 through
+1599 counts, and 0.5 at 1600 counts or more. Each calibrated minimum motor speed is
 added and output is capped at the original 50%.
 
 Normal following uses an 8-count stop band and a 24-count restart band. A
 moving lever therefore continues through the former 50-count stop/start zone,
 while a stopped lever cannot reverse repeatedly because of ADC noise or
 drivetrain overrun. When both normalised simulator targets are within 2.5%, a
-bounded correction of up to eight PWM percentage points slows the leading
-lever and accelerates the lagging lever. The comparison uses corrected angular
-travel rather than raw ADC counts. Both corrected PWM values are
+bounded correction of up to sixteen PWM percentage points slows the leading
+lever and accelerates the lagging lever. The comparison measures each lever's
+distance from its own target in corrected angular travel, so a small intentional
+left/right target difference is preserved. Both corrected PWM values are
 sent in the same `PK_PWMUpdateDirectly` transaction. A direction reversal first
 coasts the bridge for one worker pass. The ten-leg ground-test sequencer has
 priority over normal A/T follow, and analogue feedback loss immediately coasts
 both throttle motors.
+
+When X-Plane reports that the user's aircraft has been unloaded, the main
+thread publishes an explicit inactive state to the PoKeys worker before it
+clears dataref handles. The worker stops simulator-owned motors once, marks its
+input snapshots unavailable and suspends high-rate analogue/digital polling.
+The connection and one-second health check remain active, as does any requested
+parking-brake interlock release pulse. Polling resumes when a supported aircraft
+becomes active or while the calibration window owns the hardware. A failed
+analogue read also stops a motor only if it was powered; later failures cannot
+flood the device with repeated coast/PWM transactions.
 
 ## Throttle test
 
@@ -595,6 +612,7 @@ hardware commands.
 | `pokeys_get_trim_cutout_inputs()` | Copy the coherent MAIN ELECT/AUTOPILOT trim-cutout snapshot from physical pins 8 and 10 |
 | `pokeys_set_parking_brake_indicator()` | Queue the battery-gated pin-11 lamp state |
 | `pokeys_set_backlight()` | Queue the battery-master-controlled pin-10 decals/backlight state |
+| `pokeys_set_simulator_aircraft_active()` | Put hardware polling and simulator-owned motors into standby across aircraft unload/load transitions |
 | `pokeys_set_aircraft_in_flight()` | Select normal flight-detent policy |
 | `pokeys_set_calibration_active()` | Force detent release during calibration |
 | `pokeys_set_trim_target()` | Publish a bounded target and enable/disable the trim-wheel governor |

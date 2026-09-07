@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: pokeys_thread.c                                                     */
-/*   VERSION: 1.0.2                                                                 */
+/*   VERSION: 1.0.3                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -84,18 +84,18 @@ typedef int32_t								(*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
 #define THROTTLE_FAST_DUTY					250000U
 #define THROTTLE_ENDPOINT_TOLERANCE			50U
 #define THROTTLE_LEG_TIMEOUT_MS				15000U
-#define POKEYS_CONTROL_INTERVAL_MS			20U
-#define POKEYS_HEALTH_INTERVAL_CYCLES		50U
+#define POKEYS_CONTROL_INTERVAL_MS			40U
+#define POKEYS_HEALTH_INTERVAL_CYCLES		25U
 #define THROTTLE_FOLLOW_START_DEADBAND		24L
 #define THROTTLE_FOLLOW_STOP_DEADBAND		8L
-#define THROTTLE_CONSERVATIVE_RANGE			800L
-#define THROTTLE_MEDIUM_RANGE				1200L
+#define THROTTLE_CONSERVATIVE_RANGE			1000L
+#define THROTTLE_MEDIUM_RANGE				1600L
 #define THROTTLE_MAX_SPEED_PERCENT			50L
 #define THROTTLE_SYNC_TARGET_TOLERANCE		0.025f
-#define THROTTLE_SYNC_GAIN					160.0f
-#define THROTTLE_SYNC_MAX_CORRECTION		8L
+#define THROTTLE_SYNC_GAIN					320.0f
+#define THROTTLE_SYNC_MAX_CORRECTION		16L
 #define THROTTLE_MANUAL_ERROR_COUNTS		65L
-#define THROTTLE_MANUAL_ERROR_SAMPLES		13
+#define THROTTLE_MANUAL_ERROR_SAMPLES		6
 #define THROTTLE_MANUAL_DRIVE_GRACE_MS		1500U
 #define THROTTLE_MANUAL_COAST_GRACE_MS		1000U
 #define THROTTLE_MANUAL_MIN_DUTY			37500U
@@ -163,6 +163,7 @@ static volatile LONG g_parking_brake_indicator;
 static volatile LONG g_parking_brake_indicator_update_requested;
 static volatile LONG g_backlight;
 static volatile LONG g_backlight_update_requested;
+static volatile LONG g_simulator_aircraft_active;
 static volatile LONG g_trim_target_position;
 static volatile LONG g_trim_motor_enabled;
 static volatile LONG g_trim_manual_enabled;
@@ -1507,7 +1508,7 @@ static int detect_throttle_manual_override(int index, LONG target, LONG position
  *
  * The
  * original selects proportional gains of 0.045, 0.06 and 0.5 for errors below
- * 800, below 1200 and at/above 1200 corrected ADC counts.  Calibrated minimum
+ * 1000, below 1600 and at/above 1600 corrected ADC counts. Calibrated minimum
  * drive is added and output is capped at the original 50 percent maximum.
  *
  * When both simulator targets are effectively equal, a bounded correction is
@@ -1585,13 +1586,13 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	int i;
 	ULONGLONG now = GetTickCount64();
 
-	if (!throttle_follow_command_snapshot(&enabled, target, minimum))
-	{
-		stop_throttle_motors(api, device, duty_cycles);
-		*left_direction = 2;
-		*right_direction = 2;
-		return;
-	}
+	/*
+	 * A 100 Hz X-Plane publisher can be pre-empted while its sequence is odd.
+	 * That is not a hardware fault: the duties already applied belong to the
+	 * preceding coherent command. Preserve them for this worker pass and retry
+	 * at the next pass instead of creating a visible stop/start motor pulse.
+	 */
+	if (!throttle_follow_command_snapshot(&enabled, target, minimum)) return;
 	applied[0] = left_direction;
 	applied[1] = right_direction;
 	limit_min[0] = InterlockedCompareExchange(&g_throttle_left_min, 0, 0);
@@ -1680,8 +1681,13 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		if (target_difference < 0.0f) target_difference = -target_difference;
 		if (target_difference <= THROTTLE_SYNC_TARGET_TOLERANCE)
 		{
-			/* Positive lead means the left lever is ahead in travel direction. */
-			lead = (current_normalised[0] - current_normalised[1]) *
+			/*
+			 * Positive lead means the left lever is closer to its own target in
+			 * the direction of travel. Subtracting the target separation avoids
+			 * incorrectly forcing slightly asymmetric engine commands together.
+			 */
+			lead = ((current_normalised[0] - target_normalised[0]) -
+				(current_normalised[1] - target_normalised[1])) *
 				(desired[0] == 1 ? 1.0f : -1.0f);
 			correction = (LONG)(lead * THROTTLE_SYNC_GAIN +
 				(lead >= 0.0f ? 0.5f : -0.5f));
@@ -1920,6 +1926,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	uint32_t trim_indicator_applied = UINT32_MAX;
 	int trim_applied_direction = 2;
 	int trim_pending_direction = 0;
+	int simulator_controls_active_applied = 0;
 	ULONGLONG trim_direction_deadline = 0;
 	TrimBrakeRamp trim_brake_ramp;
 	MinMaxFeedbackFilter trim_feedback_filter;
@@ -1960,6 +1967,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 			uint32_t raw[POKEYS_LEVER_COUNT] = { 0 };
 			uint32_t throttle_left_position;
 			uint32_t throttle_right_position;
+			int simulator_controls_active;
 			if (InterlockedExchange(&g_network_protocol_change_requested, 0) != 0)
 			{
 				if (connected_over_network)
@@ -1973,6 +1981,67 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 			process_parking_brake_indicator(&api, device, &parking_brake_indicator_applied);
 			process_backlight(&api, device, &backlight_applied);
 			apply_flight_detent_state(&api, device, 0);
+			simulator_controls_active =
+				InterlockedCompareExchange(&g_simulator_aircraft_active, 0, 0) != 0 ||
+				InterlockedCompareExchange(&g_calibration_active, 0, 0) != 0;
+
+			/*
+			 * X-Plane keeps the plugin and PoKeys connection alive while replacing
+			 * the user aircraft. Do not continue high-rate lever/switch polling or
+			 * closed-loop motor work after the aircraft-unloaded notification. On
+			 * the active-to-standby edge, stop each applicable actuator once; the
+			 * parking-brake release pulse remains serviced above because it is an
+			 * explicit lifecycle safety action.
+			 */
+			if (!simulator_controls_active)
+			{
+				if (simulator_controls_active_applied)
+				{
+					trim_pending_direction = 0;
+					trim_direction_deadline = 0;
+					cancel_trim_brake_ramp(&trim_brake_ramp);
+					if (throttle_test_stage != THROTTLE_TEST_IDLE)
+						abort_throttle_test(&api, device, duty_cycles,
+							&throttle_test_stage, &throttle_test_deadline,
+							"Throttle test stopped: simulator aircraft unloaded");
+					else if (throttle_left_direction != 2 ||
+						throttle_right_direction != 2 ||
+						duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] != 0U ||
+						duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] != 0U)
+						stop_throttle_motors(&api, device, duty_cycles);
+					throttle_left_direction = 2;
+					throttle_right_direction = 2;
+					if (trim_applied_direction != 2 ||
+						duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
+						stop_trim_motor(&api, device, duty_cycles, 0,
+							&trim_applied_direction);
+					if (speedbrake_deadline != 0 ||
+						duty_cycles[SPEEDBRAKE_PWM_CHANNEL] != 0U)
+						stop_speedbrake_motor(&api, device, duty_cycles);
+					speedbrake_deadline = 0;
+					if (duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] != 0U)
+					{
+						duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] = 0U;
+						pwm_update(&api, device, duty_cycles,
+							"disabling trim indicator while no aircraft is loaded");
+					}
+					trim_indicator_applied = UINT32_MAX;
+					minmax_feedback_filter_reset(&trim_feedback_filter);
+					minmax_feedback_filter_reset(&throttle_left_feedback_filter);
+					minmax_feedback_filter_reset(&throttle_right_feedback_filter);
+					levers_set_unavailable();
+					parking_brake_input_set_unavailable();
+					toga_inputs_set_unavailable();
+					at_disconnect_inputs_set_unavailable();
+					fuel_cutoff_inputs_set_unavailable();
+					trim_cutout_inputs_set_unavailable();
+					log_write("PoKeys worker entered aircraft-unloaded standby; simulator-driven polling and motors stopped");
+				}
+				simulator_controls_active_applied = 0;
+			}
+			else
+			{
+				simulator_controls_active_applied = 1;
 			if (api.analog_get_array(device, raw) == PK_OK)
 			{
 				uint32_t trim_position = minmax_feedback_filter_add(&trim_feedback_filter, 4095U - (raw[3] > 4095U ? 4095U : raw[3]));
@@ -1994,17 +2063,22 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 			}
 			else 
 			{
-				/* Never leave any closed-loop motor powered without feedback. */
+				/* Never leave a powered closed-loop motor without feedback. */
 				trim_pending_direction = 0;
 				trim_direction_deadline = 0;
 				cancel_trim_brake_ramp(&trim_brake_ramp);
-				throttle_left_direction = 2;
-				throttle_right_direction = 2;
 				minmax_feedback_filter_reset(&trim_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_left_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_right_feedback_filter);
-				stop_trim_motor(&api, device, duty_cycles, 0, &trim_applied_direction);
-				stop_throttle_motors(&api, device, duty_cycles);
+				if (trim_applied_direction != 2 ||
+					duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
+					stop_trim_motor(&api, device, duty_cycles, 0,
+						&trim_applied_direction);
+				if (throttle_left_direction != 2 ||
+					throttle_right_direction != 2 ||
+					duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] != 0U ||
+					duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] != 0U)
+					stop_throttle_motors(&api, device, duty_cycles);
 				throttle_left_direction = 2;
 				throttle_right_direction = 2;
 				if (++read_failures == 3U) 
@@ -2101,6 +2175,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 					log_write("Three consecutive reads of trim cutout switch pins %u and %u failed", ELECTRIC_TRIM_NORMAL_SWITCH_PIN, AUTOPILOT_TRIM_NORMAL_SWITCH_PIN);
 				}
 			}
+			}
 			if (reconnect_for_protocol ||
 				++health_counter >= POKEYS_HEALTH_INTERVAL_CYCLES)
 			{
@@ -2129,6 +2204,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				api.disconnect(device);
 				device = NULL;
 				connected_over_network = 0;
+				simulator_controls_active_applied = 0;
 				/* A new device has no knowledge of the preceding bridge state. */
 				throttle_left_direction = 2;
 				throttle_right_direction = 2;
@@ -2257,6 +2333,7 @@ int pokeys_thread_start(const PluginConfig* config)
 	memset(&g_trim_cutout_inputs, 0, sizeof(g_trim_cutout_inputs));
 	InterlockedExchange(&g_aircraft_in_flight, 0);
 	InterlockedExchange(&g_calibration_active, 0);
+	InterlockedExchange(&g_simulator_aircraft_active, 0);
 	InterlockedExchange(&g_detent_update_requested, 1);
 	InterlockedExchange(&g_detent_retracted, 0);
 	InterlockedExchange(&g_speedbrake_detent_override, 0);
@@ -2442,6 +2519,15 @@ void pokeys_set_backlight(int illuminated)
 	LONG value = illuminated ? 1 : 0;
 	if (InterlockedExchange(&g_backlight, value) != value)
 		InterlockedExchange(&g_backlight_update_requested, 1);
+}
+
+void pokeys_set_simulator_aircraft_active(int active)
+{
+	/*
+	 * Publish lifecycle state only. The PoKeys worker owns the corresponding
+	 * motor-safe transition and never performs device I/O on X-Plane's thread.
+	 */
+	InterlockedExchange(&g_simulator_aircraft_active, active ? 1L : 0L);
 }
 
 void pokeys_set_aircraft_in_flight(int in_flight)

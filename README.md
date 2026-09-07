@@ -1,6 +1,6 @@
 # xpCFY_TQ
 
-`xpCFY_TQ` version 1.0.2 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
+`xpCFY_TQ` version 1.0.3 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
 quadrants. It connects X-Plane 12 and the Zibo 737 to CFY TQ V3, V4 and Pro
 hardware through a PoKeys controller.
 
@@ -80,6 +80,12 @@ TCP is the default. Selecting the button saves the new transport in
 with the selected protocol. An active USB connection is left unchanged, but
 the saved choice is used for the next Ethernet connection.
 
+The saved `[connection]` section contains a readable
+`network_protocol=TCP` or `network_protocol=UDP` entry. The plugin also writes
+the legacy `network_use_udp=0|1` entry for compatibility. Existing files that
+lack `network_protocol` are migrated automatically at startup, and every save
+is read back to verify that the selected protocol reached disk.
+
 The plugin creates its runtime files beside `xpCFY_TQ.xpl`:
 
 - `xpCFY_TQ.calibration.cfg` — saved hardware calibration.
@@ -88,6 +94,11 @@ The plugin creates its runtime files beside `xpCFY_TQ.xpl`:
 - `xpCFY_TQ.log` — current-session diagnostic log.
 
 The log is recreated whenever the plugin starts.
+
+During an aircraft change, the PoKeys connection remains open but simulator
+motor control and high-rate input polling enter standby until the next supported
+aircraft is ready. This prevents stale throttle targets and repeated hardware
+commands from crossing the X-Plane aircraft-unload boundary.
 
 ## Troubleshooting
 
@@ -104,6 +115,7 @@ The log is recreated whenever the plugin starts.
 - `src/*.c` — plugin implementation.
 - `inc/*.h` and `pokeys/*.h` — plugin and PoKeys API declarations.
 - `POKEYS_HARDWARE.md` — hardware and control-logic reference.
+- `CHANGELOG.md` — versioned release history.
 - `plugins/` — ready-to-install 64-bit plugin binaries.
 - `xpCFY_TQ.slnx`, `xpCFY_TQ.vcxproj` and `xpCFY_TQ.vcxproj.filters` — Visual
   Studio solution and project metadata.

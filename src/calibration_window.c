@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: calibration_window.c                                                */
-/*   VERSION: 1.0.2                                                               */
+/*   VERSION: 1.0.3                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
