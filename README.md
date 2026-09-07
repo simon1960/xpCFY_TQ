@@ -1,6 +1,6 @@
 # xpCFY_TQ
 
-`xpCFY_TQ` version 1.0.3 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
+`xpCFY_TQ` version 1.0.4 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
 quadrants. It connects X-Plane 12 and the Zibo 737 to CFY TQ V3, V4 and Pro
 hardware through a PoKeys controller.
 
@@ -74,11 +74,18 @@ Calibration can be repeated later from the **xpCFY_TQ > TQ Calibration** item
 in X-Plane's Plugins menu. The status and live-position windows are available
 from the same menu.
 
-The calibration window also contains a **PoKeys network: TCP/UDP** toggle.
-TCP is the default. Selecting the button saves the new transport in
-`xpCFY_TQ.cfg`; an active Ethernet connection is safely closed and rediscovered
-with the selected protocol. An active USB connection is left unchanged, but
-the saved choice is used for the next Ethernet connection.
+The **xpCFY_TQ > General Configuration** window selects the CFY TQ V3, V4 or
+Pro hardware topology and contains the **PoKeys network: TCP/UDP** toggle. Select
+**Save** to write both settings to `xpCFY_TQ.cfg`. When the hardware variant
+changes, the worker makes the motor outputs safe and reconnects before applying
+the new bridge topology. TCP is the default network transport. An active
+Ethernet connection is safely closed and rediscovered when its protocol changes.
+An active USB connection retains its transport, but the saved choice is used
+for the next Ethernet connection.
+
+The speedbrake, parking-brake and throttle test buttons are also located in the
+General Configuration window. They are enabled only while the aircraft battery
+is off and the aircraft is on the ground.
 
 The saved `[connection]` section contains a readable
 `network_protocol=TCP` or `network_protocol=UDP` entry. The plugin also writes

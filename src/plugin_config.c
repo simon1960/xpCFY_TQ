@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: plugin_config.c                                                     */
-/*   VERSION: 1.0.3                                                                 */
+/*   VERSION: 1.0.4                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -103,8 +103,10 @@ int plugin_config_read(PluginConfig* config)
     config->network_use_udp = ini_network_protocol(path,
         config->network_use_udp, &needs_protocol_rewrite);
     config->require_cfy_user_id = ini_uint(path, "require_cfy_user_id", config->require_cfy_user_id, 0, 1) != 0;
-    log_write("Configuration loaded from %s (PoKeys network protocol %s)",
-        path, config->network_use_udp ? "UDP" : "TCP");
+    log_write("Configuration loaded from %s (TQ variant %s, PoKeys network protocol %s)",
+        path, config->trim_motor_variant == 3U ? "V3" :
+        (config->trim_motor_variant == 5U ? "Pro" : "V4"),
+        config->network_use_udp ? "UDP" : "TCP");
     if (needs_protocol_rewrite)
     {
         log_write("Migrating plugin configuration to persist the selected PoKeys protocol");
@@ -122,6 +124,7 @@ int plugin_config_write(const PluginConfig* config)
     FILE* stream;
     int count, write_ok, close_ok, ok;
     char persisted_protocol[16];
+    UINT persisted_variant;
 
     if (!plugin_file_path(path, sizeof(path), "xpCFY_TQ.cfg"))
         return(0);
@@ -148,10 +151,13 @@ int plugin_config_write(const PluginConfig* config)
         persisted_protocol[0] = '\0';
         GetPrivateProfileStringA("connection", "network_protocol", "",
             persisted_protocol, (DWORD)sizeof(persisted_protocol), path);
+        persisted_variant = GetPrivateProfileIntA("connection",
+            "trim_motor_variant", 0, path);
         ok = _stricmp(persisted_protocol,
-            config->network_use_udp ? "UDP" : "TCP") == 0;
+            config->network_use_udp ? "UDP" : "TCP") == 0 &&
+            persisted_variant == config->trim_motor_variant;
         if (!ok)
-            log_write("Plugin configuration protocol verification failed for %s", path);
+            log_write("Plugin configuration verification failed for %s", path);
     }
     if (!ok) 
     {

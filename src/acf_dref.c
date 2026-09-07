@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: acf_dref.c                                                          */
-/*   VERSION: 1.0.3                                                                 */
+/*   VERSION: 1.0.4                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -63,7 +63,7 @@ static TqMovingAverage	g_speedbrake_filter;
 static TqMovingAverage	g_trim_filter;
 static TqMovingAverage	g_reverser_left_filter;
 static TqMovingAverage	g_reverser_right_filter;
-static TqFlapsFilter		g_flaps_filter;
+static TqFlapsFilter	g_flaps_filter;
 static float			g_last_throttle_left_written;
 static float			g_last_throttle_right_written;
 static float			g_last_speedbrake_written;
@@ -95,7 +95,6 @@ static int				g_trim_cutout_waiting_for_guards;
 static int				g_trim_first_run_active;
 static int				g_manual_trim_command_direction;
 static int				g_last_trim_dataref_direction;
-static int				g_trim_dataref_input_initialised;
 static int				g_toga_selected_since_at_arm;
 static int				g_manual_throttle_disconnect_pending;
 static int				g_unowned_throttle_tracking;
@@ -452,7 +451,6 @@ static void update_manual_trim_command_direction(void)
 static int tq_trim_command_handler(XPLMCommandRef command, XPLMCommandPhase phase, void* refcon)
 {
 	TqTrimCommandBinding* binding = (TqTrimCommandBinding*)refcon;
-	int previous_direction = g_manual_trim_command_direction;
 	int motor_allowed;
 
 	(void)command;
@@ -477,9 +475,6 @@ static int tq_trim_command_handler(XPLMCommandRef command, XPLMCommandPhase phas
 	{
 		pokeys_set_trim_manual_command(0, 0);
 	}
-	if (previous_direction != g_manual_trim_command_direction)
-		log_write("Manual trim command changed: %s via %s (A/P %s)", g_manual_trim_command_direction < 0 ? "nose down" : (g_manual_trim_command_direction > 0 ? "nose up" : "released"), binding->name,	acData.ap_engaged >= 0.5 ? "engaged" : "disengaged");
-	
 	/* Observe only: X-Plane and Zibo must still receive and act on the command. */
 	return(1);
 }
@@ -571,7 +566,6 @@ void TqControlsReset(void)
 	g_trim_first_run_active = 1;
 	g_manual_trim_command_direction = 0;
 	g_last_trim_dataref_direction = 0;
-	g_trim_dataref_input_initialised = 0;
 	g_toga_selected_since_at_arm = 0;
 	g_manual_throttle_disconnect_pending = 0;
 	g_unowned_throttle_tracking = 0;
@@ -976,9 +970,6 @@ static void ProcessTqTrimCutoutSwitches(void)
 		g_last_trim_cutout_sequence = inputs.sequence;
 		g_trim_cutout_electric_commanded = 0;
 		g_trim_cutout_autopilot_commanded = 0;
-		log_write("Trim cutout hardware changed: electric=%s autopilot=%s",
-			inputs.electric_normal ? "NORMAL" : "CUTOUT",
-			inputs.autopilot_normal ? "NORMAL" : "CUTOUT");
 	}
 	now = XPLMGetElapsedTime();
 
@@ -1136,7 +1127,6 @@ static void ProcessTqTrim(void)
 	int motor_allowed;
 	int motor_running;
 	int manual_direction;
-	int trim_datarefs_available;
 
 	if (!g_control_calibration_valid)
 	{
@@ -1166,20 +1156,9 @@ static void ProcessTqTrim(void)
 	motor_running = pokeys_trim_motor_is_running();
 	manual_direction = g_manual_trim_command_direction;
 	if (manual_direction == 0)
-		manual_direction = manual_trim_direction_from_datarefs(simulator_before - g_last_simulator_trim, &trim_datarefs_available);
-	else
-		trim_datarefs_available = drefTable[DREF_TRIM_POS_CA].handle != NULL ||	drefTable[DREF_TRIM_POS_FO].handle != NULL;
-	if (!g_trim_dataref_input_initialised || manual_direction != g_last_trim_dataref_direction)
-	{
-		log_write("Manual trim input: Captain=%.1f First Officer=%.1f, request=%s, source=%s",
-			acData.trim_pos_ca, acData.trim_pos_fo,
-			manual_direction < 0 ? "nose down" :
-			(manual_direction > 0 ? "nose up" : "released"),
-			g_manual_trim_command_direction != 0 ? "XPLM electrical/trim command" :
-			(trim_datarefs_available ? "Zibo datarefs" : "no active input"));
-		g_last_trim_dataref_direction = manual_direction;
-		g_trim_dataref_input_initialised = 1;
-	}
+		manual_direction = manual_trim_direction_from_datarefs(
+			simulator_before - g_last_simulator_trim, NULL);
+	g_last_trim_dataref_direction = manual_direction;
 	physical_trim = trim_position_to_simulator(physical_position);
 
 	if (!g_trim_input_initialised)

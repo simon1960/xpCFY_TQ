@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: pokeys_thread.c                                                     */
-/*   VERSION: 1.0.3                                                                 */
+/*   VERSION: 1.0.4                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -70,6 +70,8 @@ typedef int32_t								(*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
 #define TRIM_POSITION_DEADBAND				50L
 #define TRIM_CONSERVATIVE_RANGE				800L
 #define TRIM_DIRECTION_BRAKE_MS				100U
+#define TRIM_START_RAMP_STEP_MS				50U
+#define TRIM_START_RAMP_STEP_DUTY			25000U
 #define TRIM_BRAKE_RAMP_STEP_MS				50U
 #define TRIM_BRAKE_RAMP_STEP_DUTY			25000U
 #define TRIM_FEEDBACK_SAMPLES				12U
@@ -95,6 +97,9 @@ typedef int32_t								(*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
 #define THROTTLE_SYNC_TARGET_TOLERANCE		0.025f
 #define THROTTLE_SYNC_GAIN					320.0f
 #define THROTTLE_SYNC_MAX_CORRECTION		16L
+#define THROTTLE_SYNC_POSITION_DEADBAND		(12.0f / 4095.0f)
+#define THROTTLE_SYNC_FILTER_ALPHA			0.20f
+#define THROTTLE_SYNC_FILTER_SETTLED			0.05f
 #define THROTTLE_MANUAL_ERROR_COUNTS		65L
 #define THROTTLE_MANUAL_ERROR_SAMPLES		6
 #define THROTTLE_MANUAL_DRIVE_GRACE_MS		1500U
@@ -135,6 +140,8 @@ static HANDLE g_thread;
 static PluginConfig g_config;
 static volatile LONG g_network_use_udp;
 static volatile LONG g_network_protocol_change_requested;
+static volatile LONG g_trim_motor_variant_requested;
+static volatile LONG g_trim_motor_variant_change_requested;
 static volatile LONG g_connected;
 static SRWLOCK g_status_lock = SRWLOCK_INIT;
 static PokeysStatus g_status;
@@ -1129,14 +1136,49 @@ static void stop_trim_motor(PokeysApi* api, sPoKeysDevice* device, uint32_t duty
 			*applied_direction = bridge_state;
 		}
 	}
-	if (InterlockedExchange(&g_trim_motor_running, 0) != 0)
-		log_write("Stabiliser-trim motor stopped (%s)",	brake ? "brake" : "coast");
+	InterlockedExchange(&g_trim_motor_running, 0);
 }
 
 static void cancel_trim_brake_ramp(TrimBrakeRamp* ramp)
 {
 	ramp->active = 0;
 	ramp->next_step_at = 0;
+}
+
+/*
+ * Limit positive PWM changes without delaying initial response. A stopped
+ * motor is energised immediately at its calibrated minimum moving duty, then
+ * gains five percentage points every 50 ms until it reaches the governor or
+ * manual-command request. Reductions remain immediate so the position loop can
+ * still decelerate promptly as it approaches the target.
+ */
+static uint32_t trim_start_ramp_duty(uint32_t current_duty,
+	uint32_t requested_duty, LONG minimum_speed, ULONGLONG now,
+	ULONGLONG* next_step_at)
+{
+	uint32_t minimum_duty = (uint32_t)minimum_speed * 5000U;
+	uint32_t next_duty;
+
+	if (requested_duty <= current_duty)
+	{
+		*next_step_at = 0;
+		return(requested_duty);
+	}
+	if (current_duty == 0U)
+	{
+		next_duty = minimum_duty < requested_duty ? minimum_duty : requested_duty;
+		*next_step_at = next_duty < requested_duty ?
+			now + TRIM_START_RAMP_STEP_MS : 0;
+		return(next_duty);
+	}
+	if (*next_step_at != 0 && now < *next_step_at)
+		return(current_duty);
+
+	next_duty = current_duty + TRIM_START_RAMP_STEP_DUTY;
+	if (next_duty > requested_duty) next_duty = requested_duty;
+	*next_step_at = next_duty < requested_duty ?
+		now + TRIM_START_RAMP_STEP_MS : 0;
+	return(next_duty);
 }
 
 /*
@@ -1163,7 +1205,6 @@ static void progressively_brake_trim_motor(PokeysApi* api, sPoKeysDevice* device
 		ramp->next_step_at = now;
 		ramp->target_at_start = target;
 		ramp->manual_mode = manual_mode;
-		log_write("Stabiliser-trim progressive brake started at duty %u", current_duty);
 	}
 	if (now < ramp->next_step_at) return;
 
@@ -1190,7 +1231,7 @@ static void progressively_brake_trim_motor(PokeysApi* api, sPoKeysDevice* device
  * Direction changes include the original 100 ms brake interval without ever
  * blocking the connection thread.
  */
-static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t current_position, uint32_t* indicator_applied, int* applied_direction, int* pending_direction, ULONGLONG* direction_deadline, TrimBrakeRamp* brake_ramp)
+static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t current_position, uint32_t* indicator_applied, int* applied_direction, int* pending_direction, ULONGLONG* direction_deadline, ULONGLONG* acceleration_deadline, TrimBrakeRamp* brake_ramp)
 {
 	ULONGLONG now = GetTickCount64();
 	LONG target = InterlockedCompareExchange(&g_trim_target_position, 0, 0);
@@ -1204,6 +1245,8 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	LONG error = 0;
 	LONG distance;
 	LONG speed_percent;
+	uint32_t requested_duty;
+	uint32_t applied_duty;
 	int desired_direction;
 
 	if (*indicator_applied != indicator) 
@@ -1217,6 +1260,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	{
 		*pending_direction = 0;
 		*direction_deadline = 0;
+		*acceleration_deadline = 0;
 		cancel_trim_brake_ramp(brake_ramp);
 		stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
 		return;
@@ -1260,6 +1304,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	{
 		*pending_direction = 0;
 		*direction_deadline = 0;
+		*acceleration_deadline = 0;
 		cancel_trim_brake_ramp(brake_ramp);
 		stop_trim_motor(api, device, duty_cycles, 1, applied_direction);
 		return;
@@ -1268,10 +1313,14 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	{
 		*pending_direction = 0;
 		*direction_deadline = 0;
+		*acceleration_deadline = 0;
 		progressively_brake_trim_motor(api, device, duty_cycles, applied_direction, brake_ramp, target, manual_enabled != 0);
 		return;
 	}
 	cancel_trim_brake_ramp(brake_ramp);
+	if (minimum_speed == 0)
+		minimum_speed = g_config.trim_motor_variant == 3U ? 50L : 40L;
+	if (minimum_speed > 100L) minimum_speed = 100L;
 
 	if (*pending_direction != 0) 
 	{
@@ -1286,6 +1335,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 		{
 			log_write("Unable to select stabiliser-trim motor direction");
 			*pending_direction = 0;
+			*acceleration_deadline = 0;
 			cancel_trim_brake_ramp(brake_ramp);
 			stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
 			return;
@@ -1298,6 +1348,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	{
 		cancel_trim_brake_ramp(brake_ramp);
 		stop_trim_motor(api, device, duty_cycles, 1, applied_direction);
+		*acceleration_deadline = 0;
 		*pending_direction = desired_direction;
 		*direction_deadline = now + TRIM_DIRECTION_BRAKE_MS;
 		return;
@@ -1305,9 +1356,6 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 
 	if (!manual_enabled)
 	{
-		if (minimum_speed == 0)
-			minimum_speed = g_config.trim_motor_variant == 3U ? 50L : 40L;
-		if (minimum_speed > 100L) minimum_speed = 100L;
 		speed_percent = minimum_speed +	(LONG)((distance < TRIM_CONSERVATIVE_RANGE ? 0.7f : 2.0f) *	(float)distance);
 		if (speed_percent > 100L) 
 			speed_percent = 100L;
@@ -1315,18 +1363,22 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 			speed_percent = minimum_speed;
 	}
 
-	if (duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != (uint32_t)speed_percent * 5000U) 
+	requested_duty = (uint32_t)speed_percent * 5000U;
+	applied_duty = trim_start_ramp_duty(
+		duty_cycles[TRIM_MOTOR_PWM_CHANNEL], requested_duty,
+		minimum_speed, now, acceleration_deadline);
+	if (duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != applied_duty)
 	{
-		duty_cycles[TRIM_MOTOR_PWM_CHANNEL] = (uint32_t)speed_percent * 5000U;
+		duty_cycles[TRIM_MOTOR_PWM_CHANNEL] = applied_duty;
 		if (!pwm_update(api, device, duty_cycles, "driving the stabiliser-trim wheel")) 
 		{
 			cancel_trim_brake_ramp(brake_ramp);
+			*acceleration_deadline = 0;
 			stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
 			return;
 		}
 	}
-	if (InterlockedExchange(&g_trim_motor_running, 1) == 0)
-		log_write("Stabiliser-trim motor started (%s): target %ld current %u direction %s duty %u",	manual_enabled ? "manual command" : "A/P follow", manual_enabled ? -1L : target, current_position, desired_direction < 0 ? "decrease" : "increase",	duty_cycles[TRIM_MOTOR_PWM_CHANNEL]);
+	InterlockedExchange(&g_trim_motor_running, 1);
 }
 
 static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], ULONGLONG* speedbrake_deadline,	ULONGLONG* parking_brake_deadline)
@@ -1598,13 +1650,15 @@ static LONG corrected_throttle_position(LONG raw_position, LONG minimum,
 	return((LONG)((numerator + span / 2L) / span));
 }
 
-static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t left_position, uint32_t right_position, int* left_direction, int* right_direction)
+static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t left_position, uint32_t right_position, int* left_direction, int* right_direction, float* synchronisation_correction)
 {
 	LONG enabled;
 	LONG target[2];
 	LONG current[2];
 	LONG minimum[2];
 	LONG* applied[2];
+	LONG error[2];
+	LONG distance[2];
 	uint8_t pwm_channel[2] = { THROTTLE_LEFT_PWM_CHANNEL, THROTTLE_RIGHT_PWM_CHANNEL };
 	uint32_t requested_duty[2] = { 0U, 0U };
 	LONG limit_min[2];
@@ -1612,6 +1666,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	int desired[2] = { 2, 2 };
 	int changed = 0;
 	int bridge_changed = 0;
+	int coupled_start = 0;
+	int synchronisation_active = 0;
 	int i;
 	ULONGLONG now = GetTickCount64();
 
@@ -1631,6 +1687,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 
 	if (!enabled || InterlockedCompareExchange(&g_throttle_limits_valid, 0, 0) == 0)
 	{
+		*synchronisation_correction = 0.0f;
 		memset(g_throttle_manual_monitor, 0, sizeof(g_throttle_manual_monitor));
 		if (*left_direction != 2 || *right_direction != 2 || duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] != 0U || duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] != 0U)
 		{
@@ -1646,11 +1703,26 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		limit_min[0], limit_max[0]);
 	current[1] = corrected_throttle_position((LONG)right_position,
 		limit_min[1], limit_max[1]);
+	for (i = 0; i < 2; ++i)
+	{
+		error[i] = target[i] - current[i];
+		distance[i] = error[i] < 0 ? -error[i] : error[i];
+	}
+	{
+		float target_difference = (float)(target[0] - target[1]) / 4095.0f;
+		if (target_difference < 0.0f) target_difference = -target_difference;
+		coupled_start = target_difference <= THROTTLE_SYNC_TARGET_TOLERANCE &&
+			((error[0] > 0 && error[1] > 0) ||
+			 (error[0] < 0 && error[1] < 0)) &&
+			(distance[0] > THROTTLE_FOLLOW_START_DEADBAND ||
+			 distance[1] > THROTTLE_FOLLOW_START_DEADBAND);
+	}
 
 	for (i = 0; i < 2; ++i)
 	{
-		LONG error = target[i] - current[i];
-		LONG distance = error < 0 ? -error : error;
+		LONG start_deadband = coupled_start ?
+			THROTTLE_FOLLOW_STOP_DEADBAND :
+			THROTTLE_FOLLOW_START_DEADBAND;
 		float speed_percent;
 		float gain;
 
@@ -1662,28 +1734,28 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		 */
 		if (*applied[i] == 2)
 		{
-			if (distance <= THROTTLE_FOLLOW_START_DEADBAND)
+			if (distance[i] <= start_deadband)
 				continue;
 		}
-		else if ((*applied[i] == 1 && error <= 0) ||
-			(*applied[i] == 0 && error >= 0))
+		else if ((*applied[i] == 1 && error[i] <= 0) ||
+			(*applied[i] == 0 && error[i] >= 0))
 		{
 			/*
 			 * Coast immediately after crossing the target and require a wider
 			 * error before reversing. The additional band absorbs gearbox
 			 * overrun instead of driving an alternating hunt around the target.
 			 */
-			if (distance <= THROTTLE_FOLLOW_REVERSE_DEADBAND)
+			if (distance[i] <= THROTTLE_FOLLOW_REVERSE_DEADBAND)
 				continue;
 		}
-		else if (distance <= THROTTLE_FOLLOW_STOP_DEADBAND)
+		else if (distance[i] <= THROTTLE_FOLLOW_STOP_DEADBAND)
 		{
 			continue;
 		}
-		desired[i] = error > 0 ? 1 : 0;
-		gain = distance < THROTTLE_CONSERVATIVE_RANGE ? 0.045f : (distance < THROTTLE_MEDIUM_RANGE ? 0.06f : 0.5f);
+		desired[i] = error[i] > 0 ? 1 : 0;
+		gain = distance[i] < THROTTLE_CONSERVATIVE_RANGE ? 0.045f : (distance[i] < THROTTLE_MEDIUM_RANGE ? 0.06f : 0.5f);
 		/* Preserve the original governor's fractional PWM resolution. */
-		speed_percent = (float)minimum[i] + gain * (float)distance;
+		speed_percent = (float)minimum[i] + gain * (float)distance[i];
 		if (speed_percent > (float)THROTTLE_MAX_SPEED_PERCENT)
 			speed_percent = (float)THROTTLE_MAX_SPEED_PERCENT;
 		requested_duty[i] = (uint32_t)(speed_percent * 5000.0f + 0.5f);
@@ -1702,7 +1774,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		float current_normalised[2];
 		float target_difference;
 		float lead;
-		float correction;
+		float requested_correction;
 		float speed_percent[2];
 
 		for (i = 0; i < 2; ++i)
@@ -1722,13 +1794,31 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			lead = ((current_normalised[0] - target_normalised[0]) -
 				(current_normalised[1] - target_normalised[1])) *
 				(desired[0] == 1 ? 1.0f : -1.0f);
-			correction = lead * THROTTLE_SYNC_GAIN;
-			if (correction > (float)THROTTLE_SYNC_MAX_CORRECTION)
-				correction = (float)THROTTLE_SYNC_MAX_CORRECTION;
-			if (correction < -(float)THROTTLE_SYNC_MAX_CORRECTION)
-				correction = -(float)THROTTLE_SYNC_MAX_CORRECTION;
-			speed_percent[0] = (float)requested_duty[0] / 5000.0f - correction;
-			speed_percent[1] = (float)requested_duty[1] / 5000.0f + correction;
+			if (lead > -THROTTLE_SYNC_POSITION_DEADBAND &&
+				lead < THROTTLE_SYNC_POSITION_DEADBAND)
+				requested_correction = 0.0f;
+			else
+				requested_correction = lead * THROTTLE_SYNC_GAIN;
+			if (requested_correction > (float)THROTTLE_SYNC_MAX_CORRECTION)
+				requested_correction = (float)THROTTLE_SYNC_MAX_CORRECTION;
+			if (requested_correction < -(float)THROTTLE_SYNC_MAX_CORRECTION)
+				requested_correction = -(float)THROTTLE_SYNC_MAX_CORRECTION;
+
+			/*
+			 * Low-pass the cross-coupled correction so filtered ADC movement
+			 * cannot make the two motor duties jump in opposite directions on
+			 * successive control passes.
+			 */
+			*synchronisation_correction += THROTTLE_SYNC_FILTER_ALPHA *
+				(requested_correction - *synchronisation_correction);
+			if (requested_correction == 0.0f &&
+				*synchronisation_correction > -THROTTLE_SYNC_FILTER_SETTLED &&
+				*synchronisation_correction < THROTTLE_SYNC_FILTER_SETTLED)
+				*synchronisation_correction = 0.0f;
+			speed_percent[0] = (float)requested_duty[0] / 5000.0f -
+				*synchronisation_correction;
+			speed_percent[1] = (float)requested_duty[1] / 5000.0f +
+				*synchronisation_correction;
 			for (i = 0; i < 2; ++i)
 			{
 				if (speed_percent[i] <= (float)minimum[i])
@@ -1737,8 +1827,11 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 					speed_percent[i] = (float)THROTTLE_MAX_SPEED_PERCENT;
 				requested_duty[i] = (uint32_t)(speed_percent[i] * 5000.0f + 0.5f);
 			}
+			synchronisation_active = 1;
 		}
 	}
+	if (!synchronisation_active)
+		*synchronisation_correction = 0.0f;
 
 	/* Detection runs after the governor has selected direction and duty. */
 	if (detect_throttle_manual_override(0, target[0], current[0], desired[0], requested_duty[0], now) | detect_throttle_manual_override(1, target[1], current[1], desired[1], requested_duty[1], now))
@@ -1746,6 +1839,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		stop_throttle_motors(api, device, duty_cycles);
 		*left_direction = 2;
 		*right_direction = 2;
+		*synchronisation_correction = 0.0f;
 		log_write("Pilot throttle intervention detected; A/T motors coasting pending simulator disconnect");
 		return;
 	}
@@ -1787,6 +1881,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		stop_throttle_motors(api, device, duty_cycles);
 		*left_direction = 2;
 		*right_direction = 2;
+		*synchronisation_correction = 0.0f;
 		return;
 	}
 	if (bridge_changed) changed = 1;
@@ -1795,6 +1890,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		stop_throttle_motors(api, device, duty_cycles);
 		*left_direction = 2;
 		*right_direction = 2;
+		*synchronisation_correction = 0.0f;
 	}
 }
 
@@ -1954,13 +2050,16 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	ULONGLONG throttle_test_deadline = 0;
 	int throttle_left_direction = 2;
 	int throttle_right_direction = 2;
+	float throttle_sync_correction = 0.0f;
 	int connected_over_network = 0;
 	int reconnect_for_protocol = 0;
+	int reconnect_for_variant = 0;
 	uint32_t trim_indicator_applied = UINT32_MAX;
 	int trim_applied_direction = 2;
 	int trim_pending_direction = 0;
 	int simulator_controls_active_applied = 0;
 	ULONGLONG trim_direction_deadline = 0;
+	ULONGLONG trim_acceleration_deadline = 0;
 	TrimBrakeRamp trim_brake_ramp;
 	MinMaxFeedbackFilter trim_feedback_filter;
 	MinMaxFeedbackFilter throttle_left_feedback_filter;
@@ -1982,8 +2081,11 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	{
 		if (!device)
 		{
-			/* A disconnected worker will use the latest protocol on this discovery pass. */
+			/* A disconnected worker uses the latest saved hardware selections. */
 			InterlockedExchange(&g_network_protocol_change_requested, 0);
+			InterlockedExchange(&g_trim_motor_variant_change_requested, 0);
+			g_config.trim_motor_variant = (uint32_t)InterlockedCompareExchange(
+				&g_trim_motor_variant_requested, 0, 0);
 			if (g_config.search_usb)
 			{
 				device = connect_usb(&api);
@@ -2009,6 +2111,13 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 					log_write("PoKeys network protocol preference changed to %s; active USB connection retained",
 						InterlockedCompareExchange(&g_network_use_udp, 0, 0) ? "UDP" : "TCP");
 			}
+			if (InterlockedExchange(&g_trim_motor_variant_change_requested, 0) != 0)
+			{
+				uint32_t requested_variant = (uint32_t)InterlockedCompareExchange(
+					&g_trim_motor_variant_requested, 0, 0);
+				if (requested_variant != g_config.trim_motor_variant)
+					reconnect_for_variant = 1;
+			}
 			if (WaitForSingleObject(g_stop_event, POKEYS_CONTROL_INTERVAL_MS) == WAIT_OBJECT_0) break;
 			process_actuator_commands(&api, device, duty_cycles, &speedbrake_deadline, &parking_brake_deadline);
 			process_parking_brake_indicator(&api, device, &parking_brake_indicator_applied);
@@ -2032,6 +2141,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				{
 					trim_pending_direction = 0;
 					trim_direction_deadline = 0;
+					trim_acceleration_deadline = 0;
 					cancel_trim_brake_ramp(&trim_brake_ramp);
 					if (throttle_test_stage != THROTTLE_TEST_IDLE)
 						abort_throttle_test(&api, device, duty_cycles,
@@ -2044,6 +2154,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 						stop_throttle_motors(&api, device, duty_cycles);
 					throttle_left_direction = 2;
 					throttle_right_direction = 2;
+					throttle_sync_correction = 0.0f;
 					if (trim_applied_direction != 2 ||
 						duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
 						stop_trim_motor(&api, device, duty_cycles, 0,
@@ -2081,15 +2192,16 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				throttle_left_position = minmax_feedback_filter_add(&throttle_left_feedback_filter,	4095U - (raw[0] > 4095U ? 4095U : raw[0]));
 				throttle_right_position = minmax_feedback_filter_add(&throttle_right_feedback_filter, 4095U - (raw[1] > 4095U ? 4095U : raw[1]));
 				levers_update(raw);
-				process_trim_outputs(&api, device, duty_cycles, trim_position, &trim_indicator_applied, &trim_applied_direction, &trim_pending_direction, &trim_direction_deadline, &trim_brake_ramp);
+				process_trim_outputs(&api, device, duty_cycles, trim_position, &trim_indicator_applied, &trim_applied_direction, &trim_pending_direction, &trim_direction_deadline, &trim_acceleration_deadline, &trim_brake_ramp);
 				process_throttle_test(&api, device, duty_cycles, throttle_left_position, throttle_right_position, &throttle_test_stage, &throttle_test_deadline);
 				if (throttle_test_stage == THROTTLE_TEST_IDLE)
-					process_throttle_follow(&api, device, duty_cycles, throttle_left_position, throttle_right_position, &throttle_left_direction, &throttle_right_direction);
+					process_throttle_follow(&api, device, duty_cycles, throttle_left_position, throttle_right_position, &throttle_left_direction, &throttle_right_direction, &throttle_sync_correction);
 				else
 				{
 					/* Test stages own the same bridges and always have priority. */
 					throttle_left_direction = 3;
 					throttle_right_direction = 3;
+					throttle_sync_correction = 0.0f;
 				}
 				request_automatic_speedbrake_pull_down(4095U - (raw[2] > 4095U ? 4095U : raw[2]), speedbrake_deadline != 0, &automatic_pull_down_armed);
 				read_failures = 0;
@@ -2099,6 +2211,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				/* Never leave a powered closed-loop motor without feedback. */
 				trim_pending_direction = 0;
 				trim_direction_deadline = 0;
+				trim_acceleration_deadline = 0;
 				cancel_trim_brake_ramp(&trim_brake_ramp);
 				minmax_feedback_filter_reset(&trim_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_left_feedback_filter);
@@ -2114,6 +2227,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 					stop_throttle_motors(&api, device, duty_cycles);
 				throttle_left_direction = 2;
 				throttle_right_direction = 2;
+				throttle_sync_correction = 0.0f;
 				if (++read_failures == 3U) 
 				{
 					log_write("Three consecutive PoKeys analogue reads failed; lever display is unavailable");
@@ -2151,13 +2265,14 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				log_write("Three consecutive PoKeys digital input reads failed; switch inputs are unavailable");
 			}
 			}
-			if (reconnect_for_protocol ||
+			if (reconnect_for_protocol || reconnect_for_variant ||
 				++health_counter >= POKEYS_HEALTH_INTERVAL_CYCLES)
 			{
-				if (reconnect_for_protocol)
+				if (reconnect_for_protocol || reconnect_for_variant)
 				{
-					log_write("Refreshing network PoKeys connection to use %s",
-						InterlockedCompareExchange(&g_network_use_udp, 0, 0) ? "UDP" : "TCP");
+					log_write("Refreshing PoKeys connection for%s%s configuration change",
+						reconnect_for_variant ? " TQ variant" : "",
+						reconnect_for_protocol ? " network protocol" : "");
 				}
 				else
 				{
@@ -2172,6 +2287,10 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] = 0U;
 				pwm_update(&api, device, duty_cycles,
 					"making actuator outputs safe before disconnect");
+				/* Change topology only after the old bridge has been made safe. */
+				if (reconnect_for_variant)
+					g_config.trim_motor_variant = (uint32_t)
+						InterlockedCompareExchange(&g_trim_motor_variant_requested, 0, 0);
 				throttle_test_stage = THROTTLE_TEST_IDLE;
 				throttle_test_deadline = 0;
 				InterlockedExchange(&g_throttle_test_running, 0);
@@ -2183,6 +2302,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				/* A new device has no knowledge of the preceding bridge state. */
 				throttle_left_direction = 2;
 				throttle_right_direction = 2;
+				throttle_sync_correction = 0.0f;
 				minmax_feedback_filter_reset(&trim_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_left_feedback_filter);
 				minmax_feedback_filter_reset(&throttle_right_feedback_filter);
@@ -2198,6 +2318,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				trim_applied_direction = 2;
 				trim_pending_direction = 0;
 				trim_direction_deadline = 0;
+				trim_acceleration_deadline = 0;
 				cancel_trim_brake_ramp(&trim_brake_ramp);
 				InterlockedExchange(&g_speedbrake_command, SPEEDBRAKE_COMMAND_NONE);
 				InterlockedExchange(&g_parking_brake_command, PARKING_BRAKE_COMMAND_NONE);
@@ -2216,10 +2337,11 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				at_disconnect_inputs_set_disconnected();
 				fuel_cutoff_inputs_set_disconnected();
 				trim_cutout_inputs_set_disconnected();
-				status_set_disconnected(reconnect_for_protocol ?
-					"Network protocol changed; reconnecting" :
+				status_set_disconnected((reconnect_for_protocol || reconnect_for_variant) ?
+					"PoKeys configuration changed; reconnecting" :
 					"Connection lost; discovery will retry");
 				reconnect_for_protocol = 0;
+				reconnect_for_variant = 0;
 				health_counter = 0;
 			}
 		} 
@@ -2294,6 +2416,9 @@ int pokeys_thread_start(const PluginConfig* config)
 	g_config = *config;
 	InterlockedExchange(&g_network_use_udp, config->network_use_udp ? 1 : 0);
 	InterlockedExchange(&g_network_protocol_change_requested, 0);
+	InterlockedExchange(&g_trim_motor_variant_requested,
+		(LONG)config->trim_motor_variant);
+	InterlockedExchange(&g_trim_motor_variant_change_requested, 0);
 	
 	status_set_disconnected("Waiting for PoKeys connection thread");
 	memset(&g_levers, 0, sizeof(g_levers));
@@ -2410,6 +2535,19 @@ void pokeys_set_network_protocol(int use_udp)
 	LONG requested = use_udp ? 1L : 0L;
 	if (InterlockedExchange(&g_network_use_udp, requested) != requested)
 		InterlockedExchange(&g_network_protocol_change_requested, 1);
+}
+
+/**********************************************************************************/
+/* select the trim-motor topology and safely reconfigure the connected device     */
+/**********************************************************************************/
+void pokeys_set_trim_motor_variant(uint32_t variant)
+{
+	LONG requested;
+	if (variant < 3U || variant > 5U) return;
+	requested = (LONG)variant;
+	if (InterlockedExchange(&g_trim_motor_variant_requested, requested) !=
+		requested)
+		InterlockedExchange(&g_trim_motor_variant_change_requested, 1);
 }
 
 /**********************************************************************************/

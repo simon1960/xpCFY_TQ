@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: main.c                                                              */
-/*   VERSION: 1.0.3                                                                 */
+/*   VERSION: 1.0.4                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -35,6 +35,7 @@
 #include "aircraft_config.h"
 #include "calibration.h"
 #include "calibration_window.h"
+#include "configuration_window.h"
 #include "log.h"
 #include "plugin_config.h"
 #include "plugin_paths.h"
@@ -221,9 +222,22 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 		log_shutdown();
 		return(0);
 	}
-	if (!calibration_window_initialise(&g_calibration, &g_config))
+	if (!calibration_window_initialise(&g_calibration))
 	{
 		log_write("Lever positions/calibration window could not be created");
+		status_window_shutdown();
+		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
+		g_detent_callback_registered = 0;
+		pokeys_thread_stop();
+		free(state);
+		state = NULL;
+		log_shutdown();
+		return(0);
+	}
+	if (!configuration_window_initialise(&g_config, &g_calibration))
+	{
+		log_write("General configuration window could not be created");
+		calibration_window_shutdown();
 		status_window_shutdown();
 		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
 		g_detent_callback_registered = 0;
@@ -281,8 +295,17 @@ PLUGIN_API int XPluginEnable(void)
 		pokeys_thread_stop();
 		return(0);
 	}
-	if (!calibration_window_initialise(&g_calibration, &g_config))
+	if (!calibration_window_initialise(&g_calibration))
 	{
+		status_window_shutdown();
+		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
+		g_detent_callback_registered = 0;
+		pokeys_thread_stop();
+		return(0);
+	}
+	if (!configuration_window_initialise(&g_config, &g_calibration))
+	{
+		calibration_window_shutdown();
 		status_window_shutdown();
 		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
 		g_detent_callback_registered = 0;
@@ -403,6 +426,7 @@ static void StopOperationalRuntime(void)
 	}
 	TqControlsDeactivate();
 	status_window_shutdown();
+	configuration_window_shutdown();
 	calibration_window_shutdown();
 	if (!WaitForParkingBrakeInterlockRelease(1500U))
 		log_write("Parking-brake interlock release was not confirmed before worker shutdown");

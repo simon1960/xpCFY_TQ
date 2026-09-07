@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: log.h                                                               */
-/*   VERSION: 1.0.3                                                                 */
+/*   VERSION: 1.0.4                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */

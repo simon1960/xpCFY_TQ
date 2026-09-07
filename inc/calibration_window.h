@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: calibration_window.h                                                */
-/*   VERSION: 1.0.3                                                                 */
+/*   VERSION: 1.0.4                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -17,7 +17,7 @@
 #include "datastructures.h"
 
 /* forward declaration of functions */
-int calibration_window_initialise(TqCalibration* calibration, PluginConfig* config);
+int calibration_window_initialise(TqCalibration* calibration);
 void calibration_window_shutdown(void);
 void calibration_window_show_positions(void);
 void calibration_window_begin(int automatic_request);

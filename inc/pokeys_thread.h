@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: pokeys_thread.h                                                     */
-/*   VERSION: 1.0.3                                                                 */
+/*   VERSION: 1.0.4                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -108,6 +108,8 @@ int pokeys_is_connected(void);
 void pokeys_get_status(PokeysStatus* status);
 /* Select TCP (0) or UDP (1); an active network connection is rediscovered. */
 void pokeys_set_network_protocol(int use_udp);
+/* Select V3 (3), V4 (4), or Pro (5); the worker safely reconnects. */
+void pokeys_set_trim_motor_variant(uint32_t variant);
 void pokeys_get_lever_positions(PokeysLeverPositions* positions);
 void pokeys_get_parking_brake_input(PokeysParkingBrakeInput* input);
 void pokeys_get_toga_inputs(PokeysTogaInputs* inputs);

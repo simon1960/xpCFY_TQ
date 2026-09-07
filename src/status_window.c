@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: status_window.c                                                     */
-/*   VERSION: 1.0.3                                                               */
+/*   VERSION: 1.0.4                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -24,6 +24,7 @@
 #include "datastructures.h"
 #include "pokeys_thread.h"
 #include "calibration_window.h"
+#include "configuration_window.h"
 #include "status_window.h"
 
 /* local variables */
@@ -134,6 +135,10 @@ static void menu_handler(void* menu_ref, void* item_ref)
 	}
 	else if (item == 3U) 
 	{
+		configuration_window_show();
+	}
+	else if (item == 4U)
+	{
 		calibration_window_begin(0);
 	}
 	else if (g_status_window) 
@@ -192,8 +197,9 @@ int status_window_initialise(void)
 	}
 	XPLMAppendMenuItem(g_plugin_menu, "TQ Connection Status...", (void*)(uintptr_t)1, 0);
 	XPLMAppendMenuItem(g_plugin_menu, "Lever Positions...", (void*)(uintptr_t)2, 0);
+	XPLMAppendMenuItem(g_plugin_menu, "General Configuration...", (void*)(uintptr_t)3, 0);
 	XPLMAppendMenuSeparator(g_plugin_menu);
-	XPLMAppendMenuItem(g_plugin_menu, "TQ Calibration...", (void*)(uintptr_t)3, 0);
+	XPLMAppendMenuItem(g_plugin_menu, "TQ Calibration...", (void*)(uintptr_t)4, 0);
 	return(1);
 }
 

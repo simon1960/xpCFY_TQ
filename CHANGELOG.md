@@ -2,7 +2,7 @@
 
 All notable changes to `xpCFY_TQ` are recorded here.
 
-## Unreleased
+## 1.0.4 - 2026-09-07
 
 - Reduced the PoKeys motor-control schedule to 10 ms and replaced nine serial
   digital-input reads with one bulk transaction per pass.
@@ -10,6 +10,16 @@ All notable changes to `xpCFY_TQ` are recorded here.
   so Ethernet latency cannot start one lever several commands before the other.
 - Preserved fractional PWM governor output and added wider crossing/reversal
   hysteresis to remove coarse low-speed steps and target hunting.
+- Added coupled throttle start timing and calibrated target-relative correction
+  to improve simultaneous lever motion without erasing commanded engine asymmetry.
+- Added a progressive trim-motor start ramp and retained controlled braking near
+  the commanded trim position.
+- Added a General Configuration window for selecting V3, V4, or Pro hardware and
+  TCP or UDP communication, with verified persistence in `xpCFY_TQ.cfg`.
+- Moved the ground-only speedbrake, parking-brake, and throttle tests into the
+  General Configuration window.
+- Corrected custom button rendering so state and action buttons use fully opaque
+  background colours under X-Plane's managed graphics state.
 
 ## 1.0.3 - 2026-09-07
 

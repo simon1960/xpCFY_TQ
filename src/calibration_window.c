@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: calibration_window.c                                                */
-/*   VERSION: 1.0.3                                                               */
+/*   VERSION: 1.0.4                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -27,7 +27,6 @@
 #include "calibration_window.h"
 #include "acf_dref.h"
 #include "log.h"
-#include "plugin_config.h"
 #include "pokeys_thread.h"
 
 #define CAL_WINDOW_WIDTH  850
@@ -52,7 +51,6 @@ static const LeverDefinition g_definition[DISPLAYED_LEVERS] =
 
 static XPLMWindowID g_window;
 static TqCalibration* g_calibration;
-static PluginConfig* g_config;
 static TqCalibration g_working;
 static unsigned char g_min_captured[DISPLAYED_LEVERS];
 static unsigned char g_max_captured[DISPLAYED_LEVERS];
@@ -94,28 +92,26 @@ static void draw_filled_rectangle(int left, int bottom, int right, int top,	floa
 }
 
 /*
- * State buttons must hide the floating window beneath them completely.
- * Supplying alpha 1.0 while GL blending is enabled is not sufficient on every
- * X-Plane rendering backend because the floating-window framebuffer itself is
- * later composited. Disable blending for the fill so both its colour and alpha
- * replace the destination pixels; later drawing helpers restore normal UI
- * blending for outlines and text.
+ * Fill button backgrounds with horizontal scanlines. On some X-Plane/OpenGL
+ * combinations filled immediate-mode polygons are rendered in line mode even
+ * though their separately drawn border is correct. GL_LINES is already used
+ * reliably by the plugin, so scanlines provide a deterministic solid fill
+ * without depending on the host's polygon rasterisation state.
  */
 static void draw_opaque_filled_rectangle(int left, int bottom, int right,
 	int top, float red, float green, float blue)
 {
-	XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
-	glDisable(GL_BLEND);
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-	glBlendFunc(GL_ONE, GL_ZERO);
-	glColor4f(red, green, blue, 1.00f);
-	glBegin(GL_TRIANGLES);
-	glVertex2i(left, bottom);
-	glVertex2i(right, bottom);
-	glVertex2i(right, top);
-	glVertex2i(left, bottom);
-	glVertex2i(right, top);
-	glVertex2i(left, top);
+	int y;
+
+	set_open_gl_ui_state();
+	glColor4f(red, green, blue, 1.0f);
+	glLineWidth(1.0f);
+	glBegin(GL_LINES);
+	for (y = bottom; y <= top; ++y)
+	{
+		glVertex2i(left, y);
+		glVertex2i(right, y);
+	}
 	glEnd();
 }
 
@@ -238,40 +234,11 @@ static int calibration_ranges_valid(void)
 
 static void draw_button(const char* label, int left, int bottom, int right, int top, int enabled)
 {
-	static float enabled_colour[] = { 1.0f, 1.0f, 1.0f };
-	static float disabled_colour[] = { 0.45f, 0.48f, 0.52f };
+	static float text_colour[] = { 1.0f, 1.0f, 1.0f };
 	draw_opaque_filled_rectangle(left, bottom, right, top,
 		enabled ? 0.12f : 0.08f, enabled ? 0.25f : 0.10f,
 		enabled ? 0.34f : 0.12f);
 	draw_rectangle_outline(left, bottom, right, top, enabled ? 0.30f : 0.22f, enabled ? 0.78f : 0.25f, enabled ? 0.96f : 0.28f, 1.00f);
-	draw_text(label, left + 14, bottom + 8, enabled ? enabled_colour : disabled_colour);
-}
-
-static void draw_state_button(const char* label, int left, int bottom, int right, int top, int enabled, int selected)
-{
-	static float text_colour[] = { 0.02f, 0.03f, 0.03f };
-	static float disabled_text_colour[] = { 0.45f, 0.48f, 0.52f };
-	if (!enabled) 
-	{
-		draw_opaque_filled_rectangle(left, bottom, right, top,
-			0.08f, 0.10f, 0.12f);
-		draw_rectangle_outline(left, bottom, right, top,
-			0.22f, 0.25f, 0.28f, 1.00f);
-		draw_text(label, left + 14, bottom + 8, disabled_text_colour);
-		return;
-	}
-	if (selected)
-	{
-		draw_opaque_filled_rectangle(left, bottom, right, top,
-			0.00f, 0.78f, 0.16f);
-		draw_rectangle_outline(left, bottom, right, top, 0.45f, 1.00f, 0.55f, 1.00f);
-	} 
-	else 
-	{
-		draw_opaque_filled_rectangle(left, bottom, right, top,
-			1.00f, 0.58f, 0.00f);
-		draw_rectangle_outline(left, bottom, right, top, 1.00f, 0.82f, 0.30f, 1.00f);
-	}
 	draw_text(label, left + 14, bottom + 8, text_colour);
 }
 
@@ -282,39 +249,17 @@ static void draw_calibration_window(XPLMWindowID window, void* refcon)
 	static float active_colour[] = { 0.25f, 1.00f, 0.35f };
 	static float warning_colour[] = { 1.00f, 0.65f, 0.20f };
 	static float copyright_colour[] = { 0.80f, 0.84f, 0.90f };
-	
 	PokeysLeverPositions positions;
-
-	char throttle_test_status[128];
-	
 	int left, top, right, bottom, lever;
 	int detent_ready;
-	int speedbrake_retracted = 0;
-	int speedbrake_extended = 0;
-	int parking_brake_state;
-	int ground_controls_allowed;
 	const char* message;
 	(void)refcon;
 
 	pokeys_get_lever_positions(&positions);
-	pokeys_get_throttle_test_status(throttle_test_status, (uint32_t)sizeof(throttle_test_status));
-	
 	detent_ready = !g_calibrating || pokeys_is_flight_detent_retracted();
 	message = g_calibrating && !detent_ready ? "Waiting for speedbrake flight-detent lock to retract..." : g_message;
-	
 	XPLMGetWindowGeometry(window, &left, &top, &right, &bottom);
-	
-	parking_brake_state = pokeys_get_parking_brake_state();
-	ground_controls_allowed = TqGroundTestControlsAllowed();
-	
-	if (positions.valid && g_calibration) 
-	{
-		uint32_t speedbrake = positions.value[POKEYS_LEVER_SPEED_BRAKE];
-		uint32_t minimum = g_calibration->spoiler_min_position;
-		uint32_t maximum = g_calibration->spoiler_max_position;
-		speedbrake_retracted = speedbrake <= minimum + 75U;
-		speedbrake_extended = speedbrake >= maximum - (maximum >= 75U ? 75U : maximum);
-	}
+
 	draw_text(g_calibrating ? "TQ hardware calibration" : "TQ lever positions",	left + 20, top - 35, heading_colour);
 	draw_text(message, left + 20, top - 60,	positions.valid && detent_ready ? normal_colour : warning_colour);
 
@@ -341,29 +286,13 @@ static void draw_calibration_window(XPLMWindowID window, void* refcon)
 
 	if (g_calibrating) 
 	{
-		char protocol_label[48];
-		snprintf(protocol_label, sizeof(protocol_label), "PoKeys network: %s",
-			g_config && g_config->network_use_udp ? "UDP" : "TCP");
-		draw_button(protocol_label, left + 18, top - 460, left + 250,
-			top - 426, g_config != NULL);
-		draw_button("Save calibration", left + 270, top - 460, left + 420, top - 426, detent_ready && all_captured());
-		draw_button("Cancel", left + 438, top - 460, left + 548, top - 426, 1);
-	} 
-	else if (ground_controls_allowed) 
-	{
-		draw_state_button("Speedbrake DOWN", left + 18, top - 330, left + 208, top - 296, positions.connected, speedbrake_retracted);
-		draw_state_button("Speedbrake UP", left + 220, top - 330, left + 410, top - 296, positions.connected, speedbrake_extended);
-		draw_state_button("Park brake RELEASE", left + 422, top - 330, left + 620, top - 296, positions.connected, parking_brake_state == POKEYS_PARKING_BRAKE_RELEASED);
-		draw_state_button("Park brake SET", left + 632, top - 330, left + 830, top - 296, positions.connected, parking_brake_state == POKEYS_PARKING_BRAKE_SET);
-		draw_button("Test Throttles", left + 300, top - 378, left + 550, top - 344,	positions.connected && !pokeys_is_throttle_test_running());
-		draw_text(throttle_test_status, left + 20, top - 402, pokeys_is_throttle_test_running() ? warning_colour : normal_colour);
-	} 
-	else 
-	{
-		draw_text("Hardware controls require battery OFF and aircraft on the ground.", left + 20, top - 330, warning_colour);
+		draw_button("Save calibration", left + 18, top - 460,
+			left + 168, top - 426, detent_ready && all_captured());
+		draw_button("Cancel", left + 186, top - 460,
+			left + 296, top - 426, 1);
 	}
 	if (!g_calibrating)
-		draw_button("Close", left + 365, top - 452, left + 485, top - 418, !pokeys_is_throttle_test_running());
+		draw_button("Close", left + 365, top - 452, left + 485, top - 418, 1);
 
 	draw_centred_text(XPCFY_TQ_COPYRIGHT_STRING, left, right, top - 505, copyright_colour);
 }
@@ -383,27 +312,7 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 
 	if (!g_calibrating) 
 	{
-		if (TqGroundTestControlsAllowed() && inside(x, y, left + 18, top - 330, left + 208, top - 296)) 
-		{
-			strcpy_s(g_message, sizeof(g_message), pokeys_speedbrake_retract_and_pull_down() ? "Speedbrake retract/pull-down requested; flight detent released first" :	"Speedbrake command unavailable: TQ is not connected");
-		} 
-		else if (TqGroundTestControlsAllowed() && inside(x, y, left + 220, top - 330, left + 410, top - 296)) 
-		{
-			strcpy_s(g_message, sizeof(g_message), pokeys_speedbrake_push_up_and_extend() ?	"Speedbrake push-up/full-extension requested; flight detent released first" : "Speedbrake command unavailable: TQ is not connected");
-		} 
-		else if (TqGroundTestControlsAllowed() && inside(x, y, left + 422, top - 330, left + 620, top - 296)) 
-		{
-			strcpy_s(g_message, sizeof(g_message), pokeys_parking_brake_interlock_release() ? "Parking-brake interlock release requested" :	"Parking-brake command unavailable: TQ is not connected");
-		} 
-		else if (TqGroundTestControlsAllowed() && inside(x, y, left + 632, top - 330, left + 830, top - 296)) 
-		{
-			strcpy_s(g_message, sizeof(g_message), pokeys_parking_brake_interlock_set() ? "Parking-brake interlock set requested" :	"Parking-brake command unavailable: TQ is not connected");
-		} 
-		else if (TqGroundTestControlsAllowed() && inside(x, y, left + 300, top - 378, left + 550, top - 344)) 
-		{
-			strcpy_s(g_message, sizeof(g_message), pokeys_start_throttle_test() ? "Throttle test started; keep the quadrant clear" : "Throttle test unavailable: check connection, calibration, or running test");
-		} 
-		else if (!pokeys_is_throttle_test_running() && inside(x, y, left + 365, top - 452, left + 485, top - 418)) 
+		if (inside(x, y, left + 365, top - 452, left + 485, top - 418))
 		{
 			XPLMSetWindowIsVisible(window, 0);
 			g_calibration_saved = 0;
@@ -411,37 +320,7 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 		return (1);
 	}
 
-	/*
-	 * The network protocol is independent of lever capture and can therefore
-	 * be changed while the flight-detent release is still pending. Persist the
-	 * complete configuration before asking the worker to reconnect so a write
-	 * failure never leaves the running and saved selections inconsistent.
-	 */
-	if (g_config && inside(x, y, left + 18, top - 460, left + 250,
-		top - 426))
-	{
-		int previous = g_config->network_use_udp;
-		g_config->network_use_udp = previous ? 0 : 1;
-		if (!plugin_config_write(g_config))
-		{
-			g_config->network_use_udp = previous;
-			strcpy_s(g_message, sizeof(g_message),
-				"Unable to save PoKeys protocol; selection was not changed");
-			log_write("PoKeys network protocol change was not applied because configuration persistence failed");
-		}
-		else
-		{
-			pokeys_set_network_protocol(g_config->network_use_udp);
-			snprintf(g_message, sizeof(g_message),
-				"PoKeys network protocol saved as %s; network connection will refresh",
-				g_config->network_use_udp ? "UDP" : "TCP");
-			log_write("PoKeys network protocol changed to %s from calibration window",
-				g_config->network_use_udp ? "UDP" : "TCP");
-		}
-		return (1);
-	}
-
-	if (inside(x, y, left + 438, top - 460, left + 548, top - 426)) 
+	if (inside(x, y, left + 186, top - 460, left + 296, top - 426))
 	{
 		g_calibrating = 0;
 		g_calibration_saved = 0;
@@ -480,7 +359,7 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 		}
 	}
 
-	if (inside(x, y, left + 270, top - 460, left + 420, top - 426)) 
+	if (inside(x, y, left + 18, top - 460, left + 168, top - 426))
 	{
 		if (!all_captured()) 
 		{
@@ -532,12 +411,11 @@ static int handle_wheel(XPLMWindowID window, int x, int y, int wheel, int clicks
 	return (1);
 }
 
-int calibration_window_initialise(TqCalibration* calibration, PluginConfig* config)
+int calibration_window_initialise(TqCalibration* calibration)
 {
 	XPLMCreateWindow_t parameters;
 	int screen_left, screen_top, screen_right, screen_bottom;
 	g_calibration = calibration;
-	g_config = config;
 	memset(&parameters, 0, sizeof(parameters));
 	XPLMGetScreenBoundsGlobal(&screen_left, &screen_top, &screen_right, &screen_bottom);
 	parameters.structSize = sizeof(parameters);
@@ -571,7 +449,6 @@ void calibration_window_shutdown(void)
 	if (g_window) XPLMDestroyWindow(g_window);
 	g_window = NULL;
 	g_calibration = NULL;
-	g_config = NULL;
 }
 
 void calibration_window_show_positions(void)

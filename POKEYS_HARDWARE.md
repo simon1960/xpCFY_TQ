@@ -143,8 +143,12 @@ original application's calibrated duties at trim units 0 through 15:
 30695, 29081, 27786, 26428, 25005, 23439`.
 
 PWM channel 2 drives the trim wheel between the original protected feedback
-limits 400 and 3695. On normal target arrival the governor progressively
-reduces PWM by 5 percentage points every 50 ms, then applies the bridge brake.
+limits 400 and 3695. A new movement engages immediately at the calibrated
+minimum moving duty, then increases by 5 percentage points every 50 ms until it
+reaches the manual or governor demand. This provides prompt response without
+applying the former 60%, 80%, or 100% command as a single torque step. On normal
+target arrival the governor progressively reduces PWM by 5 percentage points
+every 50 ms, then applies the bridge brake.
 It changes from conservative gain to full gain at 800 counts, adds the saved
 calibration value `trim_min_speed`, and limits output to 100%. A direction
 reversal retains its non-blocking 100 ms brake interval. Loss of an analogue
@@ -168,14 +172,19 @@ The `[connection]` value `trim_motor_variant` selects the physical bridge:
 
 The current development TQ serial 28630 is identified by the original
 application as V4, so newly generated configuration files default to value 4.
+The **General Configuration** window provides explicit V3, V4 and Pro selectors.
+Saving a changed variant first persists the complete configuration, then makes
+the active motor outputs safe and reconnects the controller before the new trim
+bridge topology is used.
 
 The `[connection]` value `network_protocol` selects the PoKeys Ethernet
 transport and is stored as `TCP` or `UDP`. Missing or invalid values default to
 TCP. The legacy numeric `network_use_udp` value (`0` for TCP, `1` for UDP) is
 still read for compatibility. On startup, an older configuration is rewritten
 with both keys so its effective selection becomes explicit and persistent.
-The calibration-window **PoKeys network: TCP/UDP** button writes the complete
-configuration atomically and verifies the saved protocol before applying it.
+The General Configuration window's **PoKeys network: TCP/UDP** button selects
+the protocol; **Save** writes the complete configuration atomically and verifies
+the saved protocol and TQ variant before applying them.
 When Ethernet is active, the worker first makes the motor outputs safe,
 disconnects, and rediscovers the controller using the new transport. USB
 remains connected because this setting applies only to PoKeys Ethernet sessions.
@@ -284,14 +293,16 @@ The automatic pull-down threshold is the calibrated speedbrake minimum plus 75
 counts. The trigger rearms only after the position rises a further 100 counts,
 which prevents repeated motor pulses while the lever remains at the stop.
 
-The live controls perform the following operations:
+The General Configuration hardware-test controls perform the following
+operations:
 
 - **Speedbrake DOWN:** release the flight detent, select retract direction,
   apply channel 3 duty 350000, then stop and coast after 2000 ms.
 - **Speedbrake UP:** release the flight detent, select extend direction, apply
   channel 3 duty 400000, then stop and coast after 2000 ms.
 
-The live window derives the speedbrake state from analogue position feedback.
+The General Configuration window derives the speedbrake state from analogue
+position feedback.
 Within 75 counts of the calibrated retracted endpoint, **Speedbrake DOWN** is
 green and **Speedbrake UP** is amber. Within 75 counts of the extended endpoint,
 the colours are reversed. Both remain amber while the lever is between endpoints.
@@ -389,7 +400,7 @@ that UI dependency. Alternative original transports send
 `S_MIP_PARKING_BRAKE = On/Off` to ProSim or set `ParkingBrakeCommand` in the
 AMST UDP message instead of writing the FSUIPC offset.
 
-### Live-window indication
+### General Configuration window indication
 
 After a successful release pulse, **Park brake RELEASE** is green and **Park
 brake SET** is amber. After a successful set pulse, the colours are reversed.
@@ -397,7 +408,7 @@ Until a command succeeds after connection, both remain amber because the
 hardware provides no position-feedback input for the interlock.
 
 All button fills use a forced opaque OpenGL path that disables blending,
-enables all RGBA colour channels and writes alpha as 1.0. Both plugin windows
+enables all RGBA colour channels and writes alpha as 1.0. All plugin windows
 initially open centred on the X-Plane screen and can then be dragged. Copyright
 notices are horizontally centred using the measured proportional-font width.
 
@@ -531,15 +542,23 @@ steps near the target.
 Normal following uses a 16-count stop band, a 40-count restart band, and an
 80-count reversal band after crossing the target. The asymmetric bands absorb
 ADC noise and drivetrain overrun without alternating motor direction around the
-commanded point. When both normalised simulator targets are within 2.5%, a
-bounded correction of up to sixteen PWM percentage points slows the leading
-lever and accelerates the lagging lever. The comparison measures each lever's
-distance from its own target in corrected angular travel, so a small intentional
-left/right target difference is preserved. Both H-bridge direction/enable states
-are applied in one `PK_DigitalIOSet` transaction and both corrected PWM values
-are sent in one `PK_PWMUpdateDirectly` transaction, so neither lever is started
-several network round trips before the other. A direction reversal first coasts
-the bridge for one worker pass. The ten-leg ground-test sequencer has
+commanded point. For matching targets and a common direction, either lever
+crossing the 40-count restart threshold couples the pair: the other lever also
+starts once it is outside the 16-count stop band. This prevents small target
+increments from moving only one handle.
+
+When both normalised simulator targets are within 2.5%, a bounded correction of
+up to sixteen PWM percentage points slows the leading lever and accelerates the
+lagging lever. A twelve-count position deadband rejects residual filtered ADC
+noise, and a first-order 20% update filter prevents the correction from changing
+both motor duties abruptly on successive passes. The comparison measures each
+lever's distance from its own target in corrected angular travel, so a small
+intentional left/right target difference is preserved. Both H-bridge
+direction/enable states are applied in one `PK_DigitalIOSet` transaction and
+both corrected PWM values are sent in one `PK_PWMUpdateDirectly` transaction, so
+neither lever is started several network round trips before the other. A
+direction reversal first coasts the bridge for one worker pass. The ten-leg
+ground-test sequencer has
 priority over normal A/T follow, and analogue feedback loss immediately coasts
 both throttle motors.
 
@@ -555,7 +574,8 @@ flood the device with repeated coast/PWM transactions.
 
 ## Throttle test
 
-The **Test Throttles** live-window button queues this ten-leg sequence:
+The **Test Throttles** button in the General Configuration window queues this
+ten-leg sequence:
 
 1. Left throttle at medium speed to fully open.
 2. Left throttle at medium speed back to fully closed.
@@ -575,7 +595,8 @@ inside the original controller's 8% minimum and 50% maximum operating range.
 Each leg uses the saved calibration endpoints and completes within 50 raw
 counts of its target. A leg is limited to 15000 ms. Loss of analogue feedback,
 a movement timeout, a PWM failure, or device disconnection stops and coasts
-both throttle motors. The live window displays the current stage or failure.
+both throttle motors. The General Configuration window displays the current
+stage or failure.
 
 ## PoKeyslib.dll functions
 
