@@ -31,8 +31,8 @@ typedef void								(*DisconnectFn)(sPoKeysDevice*);
 typedef int32_t								(*DeviceDataGetFn)(sPoKeysDevice*);
 typedef int32_t								(*PinConfigurationFn)(sPoKeysDevice*);
 typedef int32_t								(*AnalogGetArrayFn)(sPoKeysDevice*, uint32_t*);
+typedef int32_t								(*DigitalIOFn)(sPoKeysDevice*);
 typedef int32_t								(*DigitalIOSetSingleFn)(sPoKeysDevice*, uint8_t, uint8_t);
-typedef int32_t								(*DigitalIOGetSingleFn)(sPoKeysDevice*, uint8_t, uint8_t*);
 typedef int32_t								(*PWMConfigurationSetDirectlyFn)(sPoKeysDevice*, uint32_t, uint8_t*);
 typedef int32_t								(*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
 
@@ -84,10 +84,11 @@ typedef int32_t								(*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
 #define THROTTLE_FAST_DUTY					250000U
 #define THROTTLE_ENDPOINT_TOLERANCE			50U
 #define THROTTLE_LEG_TIMEOUT_MS				15000U
-#define POKEYS_CONTROL_INTERVAL_MS			40U
-#define POKEYS_HEALTH_INTERVAL_CYCLES		25U
-#define THROTTLE_FOLLOW_START_DEADBAND		24L
-#define THROTTLE_FOLLOW_STOP_DEADBAND		8L
+#define POKEYS_CONTROL_INTERVAL_MS			10U
+#define POKEYS_HEALTH_INTERVAL_CYCLES		100U
+#define THROTTLE_FOLLOW_START_DEADBAND		40L
+#define THROTTLE_FOLLOW_STOP_DEADBAND		16L
+#define THROTTLE_FOLLOW_REVERSE_DEADBAND	80L
 #define THROTTLE_CONSERVATIVE_RANGE			1000L
 #define THROTTLE_MEDIUM_RANGE				1600L
 #define THROTTLE_MAX_SPEED_PERCENT			50L
@@ -210,8 +211,9 @@ typedef struct PokeysApi
 	PinConfigurationFn				pin_configuration_get;
 	PinConfigurationFn				pin_configuration_set;
 	AnalogGetArrayFn				analog_get_array;
+	DigitalIOFn					digital_io_set;
+	DigitalIOFn					digital_io_get;
 	DigitalIOSetSingleFn			digital_io_set_single;
-	DigitalIOGetSingleFn			digital_io_get_single;
 	PWMConfigurationSetDirectlyFn	pwm_configuration_set_directly;
 	PWMUpdateDirectlyFn				pwm_update_directly;
 } PokeysApi;
@@ -308,8 +310,34 @@ static int flight_detent_should_be_retracted(void)
 
 static int set_logical_output(PokeysApi* api, sPoKeysDevice* device, uint8_t pin, int state)
 {
+	uint8_t electrical_state = (uint8_t)(state ? 0U : 1U);
+
 	/* PoKeysDevice.SetOutput uses active-low values on this TQ. */
-	return(api->digital_io_set_single(device, pin, (uint8_t)(state ? 0U : 1U)) == PK_OK);
+	device->Pins[pin].DigitalValueSet = electrical_state;
+	return(api->digital_io_set_single(device, pin, electrical_state) == PK_OK);
+}
+
+/*
+ * Apply both throttle H-bridges in one PoKeys transaction. Separate per-pin
+ * writes let the left bridge start several network round trips before the
+ * right bridge, which is plainly visible on Ethernet-connected quadrants.
+ * Keeping each DigitalValueSet cache current also makes the bulk update safe
+ * for the other configured outputs.
+ */
+static int set_throttle_bridge_outputs(PokeysApi* api,
+	sPoKeysDevice* device, int left_direction, int right_direction)
+{
+	if (left_direction != 2)
+		device->Pins[THROTTLE_LEFT_DIRECTION_PIN].DigitalValueSet =
+			(uint8_t)(left_direction ? 0U : 1U);
+	if (right_direction != 2)
+		device->Pins[THROTTLE_RIGHT_DIRECTION_PIN].DigitalValueSet =
+			(uint8_t)(right_direction ? 0U : 1U);
+	device->Pins[THROTTLE_LEFT_ENABLE_PIN].DigitalValueSet =
+		(uint8_t)(left_direction != 2 ? 0U : 1U);
+	device->Pins[THROTTLE_RIGHT_ENABLE_PIN].DigitalValueSet =
+		(uint8_t)(right_direction != 2 ? 0U : 1U);
+	return(api->digital_io_set(device) == PK_OK);
 }
 
 /*
@@ -353,7 +381,8 @@ static int apply_flight_detent_state(PokeysApi* api, sPoKeysDevice* device, int 
 	 * use active-low logic: logical TRUE (release/retract) is transmitted as
 	 * zero, while logical FALSE (engage) is transmitted as one.
 	 */
-	result = api->digital_io_set_single(device, SPEEDBRAKE_FLIGHT_DETENT_PIN, (uint8_t)(retract ? 0U : 1U));
+	result = set_logical_output(api, device, SPEEDBRAKE_FLIGHT_DETENT_PIN,
+		retract) ? PK_OK : PK_ERR_GENERIC;
 	if (result != PK_OK) 
 	{
 		InterlockedExchange(&g_detent_retracted, 0);
@@ -662,11 +691,12 @@ static int api_load(PokeysApi* api, char* error_detail, size_t error_detail_size
 	api->pin_configuration_get = (PinConfigurationFn)api_proc(api->module, "PK_PinConfigurationGet");
 	api->pin_configuration_set = (PinConfigurationFn)api_proc(api->module, "PK_PinConfigurationSet");
 	api->analog_get_array = (AnalogGetArrayFn)api_proc(api->module, "PK_AnalogIOGetAsArray");
+	api->digital_io_set = (DigitalIOFn)api_proc(api->module, "PK_DigitalIOSet");
+	api->digital_io_get = (DigitalIOFn)api_proc(api->module, "PK_DigitalIOGet");
 	api->digital_io_set_single = (DigitalIOSetSingleFn)api_proc(api->module, "PK_DigitalIOSetSingle");
-	api->digital_io_get_single = (DigitalIOGetSingleFn)api_proc(api->module, "PK_DigitalIOGetSingle");
 	api->pwm_configuration_set_directly = (PWMConfigurationSetDirectlyFn)api_proc(api->module, "PK_PWMConfigurationSetDirectly");
 	api->pwm_update_directly = (PWMUpdateDirectlyFn)api_proc(api->module, "PK_PWMUpdateDirectly");
-	if (!api->enumerate_usb || !api->enumerate_network || !api->connect_index || !api->connect_network || !api->disconnect || !api->device_data_get || !api->pin_configuration_get || !api->pin_configuration_set || !api->analog_get_array || !api->digital_io_set_single || !api->digital_io_get_single || !api->pwm_configuration_set_directly || !api->pwm_update_directly) 
+	if (!api->enumerate_usb || !api->enumerate_network || !api->connect_index || !api->connect_network || !api->disconnect || !api->device_data_get || !api->pin_configuration_get || !api->pin_configuration_set || !api->analog_get_array || !api->digital_io_set || !api->digital_io_get || !api->digital_io_set_single || !api->pwm_configuration_set_directly || !api->pwm_update_directly)
 	{
 		FreeLibrary(api->module);
 		memset(api, 0, sizeof(*api));
@@ -1402,7 +1432,7 @@ static void stop_throttle_motors(PokeysApi* api, sPoKeysDevice* device,	uint32_t
 	duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] = 0U;
 	duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] = 0U;
 	pwm_update(api, device, duty_cycles, "stopping the throttle motors");
-	if (!set_logical_output(api, device, THROTTLE_LEFT_ENABLE_PIN, 0) || !set_logical_output(api, device, THROTTLE_RIGHT_ENABLE_PIN, 0))
+	if (!set_throttle_bridge_outputs(api, device, 2, 2))
 		log_write("Unable to place both throttle motors in coast state");
 }
 
@@ -1575,14 +1605,13 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	LONG current[2];
 	LONG minimum[2];
 	LONG* applied[2];
-	uint8_t direction_pin[2] = { THROTTLE_LEFT_DIRECTION_PIN, THROTTLE_RIGHT_DIRECTION_PIN };
-	uint8_t enable_pin[2] = { THROTTLE_LEFT_ENABLE_PIN, THROTTLE_RIGHT_ENABLE_PIN };
 	uint8_t pwm_channel[2] = { THROTTLE_LEFT_PWM_CHANNEL, THROTTLE_RIGHT_PWM_CHANNEL };
 	uint32_t requested_duty[2] = { 0U, 0U };
 	LONG limit_min[2];
 	LONG limit_max[2];
 	int desired[2] = { 2, 2 };
 	int changed = 0;
+	int bridge_changed = 0;
 	int i;
 	ULONGLONG now = GetTickCount64();
 
@@ -1622,7 +1651,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	{
 		LONG error = target[i] - current[i];
 		LONG distance = error < 0 ? -error : error;
-		LONG speed_percent;
+		float speed_percent;
 		float gain;
 
 		/*
@@ -1639,7 +1668,12 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		else if ((*applied[i] == 1 && error <= 0) ||
 			(*applied[i] == 0 && error >= 0))
 		{
-			if (distance <= THROTTLE_FOLLOW_START_DEADBAND)
+			/*
+			 * Coast immediately after crossing the target and require a wider
+			 * error before reversing. The additional band absorbs gearbox
+			 * overrun instead of driving an alternating hunt around the target.
+			 */
+			if (distance <= THROTTLE_FOLLOW_REVERSE_DEADBAND)
 				continue;
 		}
 		else if (distance <= THROTTLE_FOLLOW_STOP_DEADBAND)
@@ -1648,12 +1682,11 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		}
 		desired[i] = error > 0 ? 1 : 0;
 		gain = distance < THROTTLE_CONSERVATIVE_RANGE ? 0.045f : (distance < THROTTLE_MEDIUM_RANGE ? 0.06f : 0.5f);
-		speed_percent = minimum[i] + (LONG)(gain * (float)distance);
-		if (speed_percent > THROTTLE_MAX_SPEED_PERCENT)
-			speed_percent = THROTTLE_MAX_SPEED_PERCENT;
-		if (speed_percent <= minimum[i]) 
-			speed_percent = minimum[i] + 1L;
-		requested_duty[i] = (uint32_t)speed_percent * 5000U;
+		/* Preserve the original governor's fractional PWM resolution. */
+		speed_percent = (float)minimum[i] + gain * (float)distance;
+		if (speed_percent > (float)THROTTLE_MAX_SPEED_PERCENT)
+			speed_percent = (float)THROTTLE_MAX_SPEED_PERCENT;
+		requested_duty[i] = (uint32_t)(speed_percent * 5000.0f + 0.5f);
 	}
 
 	/*
@@ -1669,8 +1702,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		float current_normalised[2];
 		float target_difference;
 		float lead;
-		LONG correction;
-		LONG speed_percent[2];
+		float correction;
+		float speed_percent[2];
 
 		for (i = 0; i < 2; ++i)
 		{
@@ -1689,21 +1722,20 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			lead = ((current_normalised[0] - target_normalised[0]) -
 				(current_normalised[1] - target_normalised[1])) *
 				(desired[0] == 1 ? 1.0f : -1.0f);
-			correction = (LONG)(lead * THROTTLE_SYNC_GAIN +
-				(lead >= 0.0f ? 0.5f : -0.5f));
-			if (correction > THROTTLE_SYNC_MAX_CORRECTION)
-				correction = THROTTLE_SYNC_MAX_CORRECTION;
-			if (correction < -THROTTLE_SYNC_MAX_CORRECTION)
-				correction = -THROTTLE_SYNC_MAX_CORRECTION;
-			speed_percent[0] = (LONG)(requested_duty[0] / 5000U) - correction;
-			speed_percent[1] = (LONG)(requested_duty[1] / 5000U) + correction;
+			correction = lead * THROTTLE_SYNC_GAIN;
+			if (correction > (float)THROTTLE_SYNC_MAX_CORRECTION)
+				correction = (float)THROTTLE_SYNC_MAX_CORRECTION;
+			if (correction < -(float)THROTTLE_SYNC_MAX_CORRECTION)
+				correction = -(float)THROTTLE_SYNC_MAX_CORRECTION;
+			speed_percent[0] = (float)requested_duty[0] / 5000.0f - correction;
+			speed_percent[1] = (float)requested_duty[1] / 5000.0f + correction;
 			for (i = 0; i < 2; ++i)
 			{
-				if (speed_percent[i] <= minimum[i])
-					speed_percent[i] = minimum[i] + 1L;
-				if (speed_percent[i] > THROTTLE_MAX_SPEED_PERCENT)
-					speed_percent[i] = THROTTLE_MAX_SPEED_PERCENT;
-				requested_duty[i] = (uint32_t)speed_percent[i] * 5000U;
+				if (speed_percent[i] <= (float)minimum[i])
+					speed_percent[i] = (float)minimum[i] + 0.1f;
+				if (speed_percent[i] > (float)THROTTLE_MAX_SPEED_PERCENT)
+					speed_percent[i] = (float)THROTTLE_MAX_SPEED_PERCENT;
+				requested_duty[i] = (uint32_t)(speed_percent[i] * 5000.0f + 0.5f);
 			}
 		}
 	}
@@ -1725,27 +1757,22 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		{
 			/* Coast before changing polarity; resume on the next worker pass. */
 			duty_cycles[pwm_channel[i]] = 0U;
-			set_logical_output(api, device, enable_pin[i], 0);
 			*applied[i] = 2;
 			requested_duty[i] = 0U;
+			bridge_changed = 1;
 			changed = 1;
 			continue;
 		}
 		if (desired[i] == 2)
 		{
 			if (*applied[i] != 2)
-				set_logical_output(api, device, enable_pin[i], 0);
+				bridge_changed = 1;
 			*applied[i] = 2;
 		}
 		else if (*applied[i] != desired[i])
 		{
-			if (!set_logical_output(api, device, direction_pin[i], desired[i]) || !set_logical_output(api, device, enable_pin[i], 1))
-			{
-				log_write("Unable to prepare %s A/T throttle motor", i == 0 ? "left" : "right");
-				requested_duty[i] = 0U;
-				desired[i] = 2;
-			}
 			*applied[i] = desired[i];
+			bridge_changed = 1;
 		}
 		if (duty_cycles[pwm_channel[i]] != requested_duty[i])
 		{
@@ -1753,6 +1780,16 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			changed = 1;
 		}
 	}
+	if (bridge_changed && !set_throttle_bridge_outputs(api, device,
+		*left_direction, *right_direction))
+	{
+		log_write("Unable to apply paired A/T throttle bridge state");
+		stop_throttle_motors(api, device, duty_cycles);
+		*left_direction = 2;
+		*right_direction = 2;
+		return;
+	}
+	if (bridge_changed) changed = 1;
 	if (changed && !pwm_update(api, device, duty_cycles, "following simulator A/T throttle targets"))
 	{
 		stop_throttle_motors(api, device, duty_cycles);
@@ -1907,10 +1944,6 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	unsigned int read_failures = 0;
 	unsigned int health_counter = 0;
 	unsigned int digital_read_failures = 0;
-	unsigned int toga_read_failures = 0;
-	unsigned int at_disconnect_read_failures = 0;
-	unsigned int fuel_cutoff_read_failures = 0;
-	unsigned int trim_cutout_read_failures = 0;
 	uint32_t duty_cycles[POKEYS_PWM_CHANNELS] = { 0U };
 	ULONGLONG speedbrake_deadline = 0;
 	ULONGLONG parking_brake_deadline = 0;
@@ -2090,90 +2123,32 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				}
 			}
 
+			/*
+			 * Read every configured switch in one device transaction. The former
+			 * nine PK_DigitalIOGetSingle calls serialized nine TCP round trips in
+			 * every governor pass, delaying the next paired analogue/PWM update.
+			 */
+			if (api.digital_io_get(device) == PK_OK)
 			{
-				uint8_t parking_brake_switch = 0U;
-				if (api.digital_io_get_single(device, PARKING_BRAKE_SWITCH_PIN,	&parking_brake_switch) == PK_OK) 
-				{
-					parking_brake_input_update(parking_brake_switch != 0U);
-					digital_read_failures = 0;
-				}
-				else if (++digital_read_failures == 3U) 
-				{
-					parking_brake_input_set_unavailable();
-					log_write("Three consecutive reads of parking-brake switch pin %u failed", PARKING_BRAKE_SWITCH_PIN);
-				}
+				parking_brake_input_update(device->Pins[PARKING_BRAKE_SWITCH_PIN].DigitalValueGet != 0U);
+				toga_inputs_update(device->Pins[LEFT_TOGA_SWITCH_PIN].DigitalValueGet != 0U,
+					device->Pins[RIGHT_TOGA_SWITCH_PIN].DigitalValueGet != 0U);
+				at_disconnect_inputs_update(device->Pins[LEFT_AT_DISCONNECT_SWITCH_PIN].DigitalValueGet != 0U,
+					device->Pins[RIGHT_AT_DISCONNECT_SWITCH_PIN].DigitalValueGet != 0U);
+				fuel_cutoff_inputs_update(device->Pins[LEFT_FUEL_CUTOFF_SWITCH_PIN].DigitalValueGet != 0U,
+					device->Pins[RIGHT_FUEL_CUTOFF_SWITCH_PIN].DigitalValueGet != 0U);
+				trim_cutout_inputs_update(device->Pins[ELECTRIC_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet != 0U,
+					device->Pins[AUTOPILOT_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet != 0U);
+				digital_read_failures = 0;
 			}
-
+			else if (++digital_read_failures == 3U)
 			{
-				uint8_t left_toga = 0U;
-				uint8_t right_toga = 0U;
-				int32_t left_result = api.digital_io_get_single(device, LEFT_TOGA_SWITCH_PIN, &left_toga);
-				int32_t right_result = api.digital_io_get_single(device, RIGHT_TOGA_SWITCH_PIN, &right_toga);
-
-				if (left_result == PK_OK && right_result == PK_OK) 
-				{
-					toga_inputs_update(left_toga != 0U, right_toga != 0U);
-					toga_read_failures = 0;
-				}
-				else if (++toga_read_failures == 3U) 
-				{
-					toga_inputs_set_unavailable();
-					log_write("Three consecutive reads of TO/GA switch pins %u and %u failed", LEFT_TOGA_SWITCH_PIN, RIGHT_TOGA_SWITCH_PIN);
-				}
-			}
-
-			{
-				uint8_t left_at_disconnect = 0U;
-				uint8_t right_at_disconnect = 0U;
-				int32_t left_result = api.digital_io_get_single(device, LEFT_AT_DISCONNECT_SWITCH_PIN, &left_at_disconnect);
-				int32_t right_result = api.digital_io_get_single(device, RIGHT_AT_DISCONNECT_SWITCH_PIN, &right_at_disconnect);
-
-				if (left_result == PK_OK && right_result == PK_OK) 
-				{
-					at_disconnect_inputs_update(left_at_disconnect != 0U, right_at_disconnect != 0U);
-					at_disconnect_read_failures = 0;
-				}
-				else if (++at_disconnect_read_failures == 3U) 
-				{
-					at_disconnect_inputs_set_unavailable();
-					log_write("Three consecutive reads of A/T disconnect switch pins %u and %u failed", LEFT_AT_DISCONNECT_SWITCH_PIN, RIGHT_AT_DISCONNECT_SWITCH_PIN);
-				}
-			}
-
-			{
-				uint8_t left_fuel_cutoff = 0U;
-				uint8_t right_fuel_cutoff = 0U;
-				int32_t left_result = api.digital_io_get_single(device, LEFT_FUEL_CUTOFF_SWITCH_PIN, &left_fuel_cutoff);
-				int32_t right_result = api.digital_io_get_single(device, RIGHT_FUEL_CUTOFF_SWITCH_PIN, &right_fuel_cutoff);
-
-				if (left_result == PK_OK && right_result == PK_OK) 
-				{
-					fuel_cutoff_inputs_update(left_fuel_cutoff != 0U, right_fuel_cutoff != 0U);
-					fuel_cutoff_read_failures = 0;
-				}
-				else if (++fuel_cutoff_read_failures == 3U) 
-				{
-					fuel_cutoff_inputs_set_unavailable();
-					log_write("Three consecutive reads of fuel-cutoff switch pins %u and %u failed", LEFT_FUEL_CUTOFF_SWITCH_PIN, RIGHT_FUEL_CUTOFF_SWITCH_PIN);
-				}
-			}
-
-			{
-				uint8_t electric_normal = 0U;
-				uint8_t autopilot_normal = 0U;
-				int32_t electric_result = api.digital_io_get_single(device, ELECTRIC_TRIM_NORMAL_SWITCH_PIN, &electric_normal);
-				int32_t autopilot_result = api.digital_io_get_single(device, AUTOPILOT_TRIM_NORMAL_SWITCH_PIN, &autopilot_normal);
-
-				if (electric_result == PK_OK && autopilot_result == PK_OK) 
-				{
-					trim_cutout_inputs_update(electric_normal != 0U, autopilot_normal != 0U);
-					trim_cutout_read_failures = 0;
-				}
-				else if (++trim_cutout_read_failures == 3U) 
-				{
-					trim_cutout_inputs_set_unavailable();
-					log_write("Three consecutive reads of trim cutout switch pins %u and %u failed", ELECTRIC_TRIM_NORMAL_SWITCH_PIN, AUTOPILOT_TRIM_NORMAL_SWITCH_PIN);
-				}
+				parking_brake_input_set_unavailable();
+				toga_inputs_set_unavailable();
+				at_disconnect_inputs_set_unavailable();
+				fuel_cutoff_inputs_set_unavailable();
+				trim_cutout_inputs_set_unavailable();
+				log_write("Three consecutive PoKeys digital input reads failed; switch inputs are unavailable");
 			}
 			}
 			if (reconnect_for_protocol ||
@@ -2213,10 +2188,6 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				minmax_feedback_filter_reset(&throttle_right_feedback_filter);
 				read_failures = 0;
 				digital_read_failures = 0;
-				toga_read_failures = 0;
-				at_disconnect_read_failures = 0;
-				fuel_cutoff_read_failures = 0;
-				trim_cutout_read_failures = 0;
 				memset(duty_cycles, 0, sizeof(duty_cycles));
 				speedbrake_deadline = 0;
 				parking_brake_deadline = 0;

@@ -514,27 +514,32 @@ to X-Plane. A/T ARM off resets the TO/GA session and permits a later re-arm.
 
 The X-Plane flight-loop callback runs at 100 Hz and publishes each coherent
 left/right target pair to the PoKeys worker. The worker services feedback and
-motor control every 40 ms, matching the original application's PoKeys polling
-interval and avoiding command saturation on a network controller. It applies
-the original twelve-sample MinMax filter
+motor control on a 10 ms schedule. All switch inputs are collected by one
+`PK_DigitalIOGet` call per pass rather than nine serial single-pin transactions;
+this keeps TCP communication from delaying the next analogue/PWM control pass.
+It applies the original twelve-sample MinMax filter
 independently to each throttle feedback potentiometer, discarding the lowest
 and highest sample before calculating the ten-sample mean. The filtered value
 is then converted to corrected 0..4095 travel before entering the governor.
 The original governor bands therefore operate in their intended domain:
 proportional gain 0.045 below 1000 corrected counts, 0.06 from 1000 through
-1599 counts, and 0.5 at 1600 counts or more. Each calibrated minimum motor speed is
-added and output is capped at the original 50%.
+1599 counts, and 0.5 at 1600 counts or more. Each calibrated minimum motor speed
+is added using fractional PWM precision and output is capped at the original
+50%; retaining the fractional result avoids visible whole-percentage speed
+steps near the target.
 
-Normal following uses an 8-count stop band and a 24-count restart band. A
-moving lever therefore continues through the former 50-count stop/start zone,
-while a stopped lever cannot reverse repeatedly because of ADC noise or
-drivetrain overrun. When both normalised simulator targets are within 2.5%, a
+Normal following uses a 16-count stop band, a 40-count restart band, and an
+80-count reversal band after crossing the target. The asymmetric bands absorb
+ADC noise and drivetrain overrun without alternating motor direction around the
+commanded point. When both normalised simulator targets are within 2.5%, a
 bounded correction of up to sixteen PWM percentage points slows the leading
 lever and accelerates the lagging lever. The comparison measures each lever's
 distance from its own target in corrected angular travel, so a small intentional
-left/right target difference is preserved. Both corrected PWM values are
-sent in the same `PK_PWMUpdateDirectly` transaction. A direction reversal first
-coasts the bridge for one worker pass. The ten-leg ground-test sequencer has
+left/right target difference is preserved. Both H-bridge direction/enable states
+are applied in one `PK_DigitalIOSet` transaction and both corrected PWM values
+are sent in one `PK_PWMUpdateDirectly` transaction, so neither lever is started
+several network round trips before the other. A direction reversal first coasts
+the bridge for one worker pass. The ten-leg ground-test sequencer has
 priority over normal A/T follow, and analogue feedback loss immediately coasts
 both throttle motors.
 
@@ -587,8 +592,9 @@ The worker dynamically resolves these 64-bit exports:
 | `PK_PinConfigurationGet` | Read the current pin configuration |
 | `PK_PinConfigurationSet` | Apply analogue and digital pin functions |
 | `PK_AnalogIOGetAsArray` | Read all lever feedback inputs |
+| `PK_DigitalIOSet` | Apply the paired throttle direction/enable state in one transaction |
+| `PK_DigitalIOGet` | Read all configured switch inputs in one transaction |
 | `PK_DigitalIOSetSingle` | Set active-low actuator, backlight, and parking-brake lamp outputs |
-| `PK_DigitalIOGetSingle` | Read inverted parking-brake, TO/GA, A/T-disconnect, and fuel-cutoff inputs on API indices 0-6 |
 | `PK_PWMConfigurationSetDirectly` | Enable six PWM channels at period 500000 |
 | `PK_PWMUpdateDirectly` | Atomically update all six PWM duty values |
 

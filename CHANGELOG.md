@@ -2,6 +2,15 @@
 
 All notable changes to `xpCFY_TQ` are recorded here.
 
+## Unreleased
+
+- Reduced the PoKeys motor-control schedule to 10 ms and replaced nine serial
+  digital-input reads with one bulk transaction per pass.
+- Applied both throttle H-bridge enable/direction states as a paired transaction
+  so Ethernet latency cannot start one lever several commands before the other.
+- Preserved fractional PWM governor output and added wider crossing/reversal
+  hysteresis to remove coarse low-speed steps and target hunting.
+
 ## 1.0.3 - 2026-09-07
 
 - Restored the original application's 40 ms PoKeys control cadence and
