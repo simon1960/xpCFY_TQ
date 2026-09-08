@@ -1,7 +1,7 @@
 # xpCFY_TQ
 
 `xpCFY_TQ` version 1.0.4 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
-quadrants. It connects X-Plane 12 and the Zibo 737 to CFY TQ V3, V4 and Pro
+quadrants. It connects X-Plane 12 and the Zibo 737 to CFY TQ V3, V4 and V4 Pro
 hardware through a PoKeys controller.
 
 The plugin synchronises the physical throttle quadrant with the aircraft and
