@@ -218,7 +218,36 @@ static int g_aircraft_active;
 static int g_aircraft_data_valid;
 static float g_next_handle_retry_time;
 
+typedef struct TqDatarefLogState
+{
+	double previous_value;
+	int initialised;
+} TqDatarefLogState;
+
+static TqDatarefLogState g_dataref_log_state[DREF_END];
+
 #define TQ_FIRST_RUN_ALL (TQ_FIRST_RUN_PARKING_BRAKE | TQ_FIRST_RUN_FUEL_CUTOFFS | TQ_FIRST_RUN_TRIM_CUTOUTS | TQ_FIRST_RUN_TRIM_POSITION | TQ_FIRST_RUN_FLAPS)
+
+/* Log the initial value and subsequent changes without flooding the 100 Hz FLCB log. */
+static void LogDatarefStateChange(dataRefLine line, const char* description, double value)
+{
+	TqDatarefLogState* state = &g_dataref_log_state[line];
+	if (drefTable[line].handle == NULL) return;
+	if (!state->initialised) log_write("%s initial state: %.3f", description, value);
+	else if (state->previous_value != value) log_write("%s changed: %.3f -> %.3f", description, state->previous_value, value);
+	state->previous_value = value;
+	state->initialised = 1;
+}
+
+static void LogRequestedAircraftStateChanges(void)
+{
+	LogDatarefStateChange(DREF_BATTERY_ON, "Battery master [DREF_BATTERY_ON]", (double)acData.battery_on);
+	LogDatarefStateChange(DREF_AUTO_THROTTLE_ARM, "A/T Arm Position [DREF_AUTO_THROTTLE_ARM]", (double)acData.at_arm);
+	LogDatarefStateChange(DREF_AUTO_THROTTLE_ACT, "A/T Status [DREF_AUTO_THROTTLE_ACT]", (double)acData.at_active);
+	LogDatarefStateChange(DREF_AP_ENGAGED, "A/P On [DREF_AP_ENGAGED]", acData.ap_engaged);
+	LogDatarefStateChange(DREF_SPD_MODE_CA, "PFD Status CA [DREF_PFD_SPD_MODE_CA]", (double)acData.pfd_speed_mode_ca);
+	LogDatarefStateChange(DREF_SPD_MODE_FO, "PFD Status FO [DREF_PFD_SPD_MODE_FO]", (double)acData.pfd_speed_mode_fo);
+}
 
 static void first_run_component_complete(uint32_t component, const char* description)
 {
@@ -633,6 +662,7 @@ void TqControlsSetAircraftActive(int active)
 	g_aircraft_data_valid = 0;
 	if (g_aircraft_active) return;
 
+	memset(g_dataref_log_state, 0, sizeof(g_dataref_log_state));
 	memset(&acData, 0, sizeof(acData));
 	for (index = 0; index < DREF_END; ++index)
 		drefTable[index].handle = NULL;
@@ -1769,6 +1799,7 @@ void left_toga_handler(void* param)
 		if (ptr->lt_toga == 1 && !ptr->ltTogaIsActive)
 		{
 			ptr->lt_toga_prev = ptr->lt_toga;
+			log_write("Left TO/GA pressed");
 			if (cmdTable[CMD_LT_TOGA].handle != NULL)
 			{
 				ptr->ltTogaIsActive = true;
@@ -1799,6 +1830,7 @@ void right_toga_handler(void* param)
 		if (ptr->rt_toga == 1 && !ptr->rtTogaIsActive)
 		{
 			ptr->rt_toga_prev = ptr->rt_toga;
+			log_write("Right TO/GA pressed");
 			if (cmdTable[CMD_RT_TOGA].handle != NULL)
 			{
 				ptr->rtTogaIsActive = true;
@@ -1829,6 +1861,7 @@ void left_at_disco_handler(void* param)
 		if (ptr->lt_at_disco == 1 && !ptr->ltAtDiscoIsActive)
 		{
 			ptr->lt_at_disco_prev = ptr->lt_at_disco;
+			log_write("Left A/T disconnect pressed");
 			if (cmdTable[CMD_LT_AT_DISCO].handle != NULL)
 			{
 				ptr->ltAtDiscoIsActive = true;
@@ -1859,6 +1892,7 @@ void right_at_disco_handler(void* param)
 		if (ptr->rt_at_disco == 1 && !ptr->rtAtDiscoIsActive)
 		{
 			ptr->rt_at_disco_prev = ptr->rt_at_disco;
+			log_write("Right A/T disconnect pressed");
 			if (cmdTable[CMD_RT_AT_DISCO].handle != NULL)
 			{
 				ptr->rtAtDiscoIsActive = true;
@@ -2089,6 +2123,7 @@ float GetAircraftDataFLCB(float elapsedMe, float elapsedSim, int counter, void* 
 
 	/* get the dataref values and populate the acData structure */
 	GetDataRefValues((void*)state);
+	LogRequestedAircraftStateChanges();
 	g_aircraft_data_valid = g_aircraft_active &&
 		drefTable[DREF_BATTERY_ON].handle != NULL &&
 		drefTable[DREF_ON_GROUND].handle != NULL;
