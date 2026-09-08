@@ -1,7 +1,7 @@
 # xpCFY_TQ
 
 `xpCFY_TQ` version 1.0.4 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
-quadrants. It connects X-Plane 12 and the Zibo 737 to CFY TQ V3, V4 and V4 Pro
+quadrants. It connects X-Plane 12 and the Zibo 737/LevelUp V2 to CFY TQ V3, V4 and V4 Pro
 hardware through a PoKeys controller.
 
 The plugin synchronises the physical throttle quadrant with the aircraft and
@@ -26,10 +26,14 @@ operation is not overridden by the plugin.
 
 - Microsoft Windows 64-bit.
 - X-Plane 12.
-- Zibo 737-800X.
-- A supported CFY TQ V3, V4 or Pro connected through its PoKeys interface.
+- Zibo 737-800X, LevelUp V2.S1 .
+- A supported CFY TQ V3, V4 or V4 Pro connected through its PoKeys interface.
 
-## Installation
+## Latest Stable Download
+The official plugin download site is XPlane.org and the latest stable version can be found at
+https://forums.x-plane.org/files/file/101415-xpcfy_tq-plugin-for-cockpitforyou-motorised-tqs/
+
+## Manual Installation
 
 1. Close X-Plane.
 2. Download the contents of the repository's `plugins` directory.
