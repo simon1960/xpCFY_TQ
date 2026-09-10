@@ -101,11 +101,15 @@ Enhanced diagnostic logging is controlled by `enhanced_logging=0|1`. It defaults
 to off for new configuration files and is also set to off when an existing file
 lacks the entry. The migrated value is written back to the configuration file.
 
-At the start of V3 First Run synchronisation, an ADC position between 400 and
-3695 inclusive is valid and is accepted immediately. If the initial position is
-below 400 or above 3695, the plugin inhibits the trim motor and displays a
-warning directing the user to switch off the MAIN ELEC cutout and manually
-rotate the wheel NOSE UP or NOSE DOWN as appropriate. After this warning, the
+Due to a design flaw in the Version 3 throttle quadrants, it is possible to move
+the trim wheel beyond its NOSE UP or NOSE DOWN limits which causes the trim wheel
+motor to lock up. I have implemented a software gate that prevents the trim wheel
+being moved electrically outside of defined limits.
+At the start of the First Run synchronisation, the Ver 3 trim wheel position is read
+and if the ADC position is between 400 and 3695, this is accepted immediately.
+If the initial position is outside of these limits, the plugin inhibits the trim motor
+and displays a warning directing the user to switch off the MAIN ELEC cutout and
+manually rotate the wheel NOSE UP or NOSE DOWN as appropriate. After this warning, the
 wheel must be moved into the central recovery range of 1059 through 3036 before
 the position is accepted. A confirmation is then displayed and normal
 simulator-owned trim synchronisation continues. The check is latched complete
