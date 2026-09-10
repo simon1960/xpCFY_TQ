@@ -160,14 +160,16 @@ The normal direction guard also prevents a new manual or closed-loop command
 from driving farther beyond either endpoint while still permitting movement
 back toward the protected range.
 
-The first accepted V3 First Run position uses a narrower central startup band of ADC 1059 through 3036,
-calculated as the 400..3695 operating midpoint plus or minus 30% of that span.
-The trim motor remains inhibited outside this band. Above 3036 the warning
-directs the user to switch off MAIN ELEC and rotate the wheel NOSE DOWN; below
-1059 it directs the user to rotate the wheel NOSE UP. The plugin confirms when
-the wheel enters the valid band and then resumes simulator-owned synchronisation.
-Once accepted, the check is latched for that synchronisation cycle and does not
-react to subsequent motor-driven travel outside the central band.
+A V3 First Run position between ADC 400 and 3695 inclusive is valid at startup
+and is accepted immediately. An initial position below 400 or above 3695 is
+invalid and keeps the trim motor inhibited. The warning directs the user to
+switch off MAIN ELEC and rotate the wheel NOSE UP when below 400 or NOSE DOWN
+when above 3695. Once warned, the wheel must be moved into the central recovery
+range of 1059 through 3036, calculated as the operating midpoint plus or minus
+30% of the 400..3695 span. The plugin confirms entry into that recovery range
+and resumes simulator-owned synchronisation. Once accepted, the check is latched
+for that synchronisation cycle and does not react to subsequent motor-driven
+travel outside the central band.
 
 Trim MAIN ELEC pin 7 and AUTOPILOT pin 9 are configured as plain digital inputs,
 matching original PoKeys mode `2`; they must not use the `0x80` inversion flag
@@ -285,11 +287,12 @@ feedback is within the 50-count deadband. Battery power, pause, and trim-cutout
 safety conditions continue to inhibit motor power, leaving First Run pending
 until movement is safe.
 
-For a V3 TQ, First Run also remains pending while trim-wheel feedback is outside
-the central startup range of 1059..3036. A one-time directional warning requests
-manual repositioning with the MAIN ELEC cutout off. Motor commands stay disabled
-until the position is valid, when a confirmation is shown and synchronisation
-continues automatically.
+For a V3 TQ, an initial trim-wheel position of 400..3695 is accepted immediately.
+First Run remains pending only when the initial feedback is outside those limits.
+A one-time directional warning requests manual repositioning with the MAIN ELEC
+cutout off, after which motor commands remain disabled until feedback reaches the
+central recovery range of 1059..3036. A confirmation is then shown and
+synchronisation continues automatically.
 
 ## Speedbrake behavior
 

@@ -6,8 +6,9 @@ All notable changes to `xpCFY_TQ` are recorded here.
 
 - Changed the missing `enhanced_logging` configuration fallback to disabled for
   both new and existing configuration files and persisted the migrated setting.
-- Added a V3 First Run trim-wheel safety gate using the central 1059..3036 ADC
-  range, with directional repositioning guidance and valid-position confirmation.
+- Added a V3 First Run trim-wheel safety gate that accepts initial ADC positions
+  from 400..3695 and requires an out-of-bounds wheel to be manually repositioned
+  into the central 1059..3036 recovery range before synchronisation continues.
   Trim targets are constrained to 400..3695 and endpoint shutdown now overrides
   an active progressive-braking ramp.
 - Removed binding-table detail from enhanced trim tracing to keep diagnostic logs

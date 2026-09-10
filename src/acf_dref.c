@@ -168,8 +168,8 @@ static int g_parking_brake_release_state;
 #define TQ_SPEEDBRAKE_AUTO_RETRACT_DELAY_SECONDS 5.0f
 #define TQ_TRIM_POSITION_MIN 400.0f
 #define TQ_TRIM_POSITION_MAX 3695.0f
-#define TQ_V3_TRIM_STARTUP_MIN 1059.0f
-#define TQ_V3_TRIM_STARTUP_MAX 3036.0f
+#define TQ_V3_TRIM_RECOVERY_MIN 1059.0f
+#define TQ_V3_TRIM_RECOVERY_MAX 3036.0f
 #define TQ_TRIM_PHYSICAL_CHANGE_COUNTS 2.0f
 #define TQ_TRIM_SYNC_TOLERANCE_COUNTS 50.0f
 #define TQ_TRIM_SIM_CHANGE_EPSILON 0.000001f
@@ -1295,25 +1295,26 @@ static void ProcessTqTrim(void)
 		float distance = physical_position - (float)target_position;
 		char trim_position_message[768];
 		const char* manual_direction;
-		int v3_trim_position_valid = physical_position >= TQ_V3_TRIM_STARTUP_MIN && physical_position <= TQ_V3_TRIM_STARTUP_MAX;
+		int v3_trim_startup_position_valid = physical_position >= TQ_TRIM_POSITION_MIN && physical_position <= TQ_TRIM_POSITION_MAX;
+		int v3_trim_recovery_position_valid = physical_position >= TQ_V3_TRIM_RECOVERY_MIN && physical_position <= TQ_V3_TRIM_RECOVERY_MAX;
 		if (distance < 0.0f)
 			distance = -distance;
 		motor_allowed = acData.paused == 0 && acData.battery_on != 0.0 && acData.ap_trim_pos < 0.5f && acData.el_trim_pos < 0.5f;
 		TRIM_TRACE("trim first-run target=%u physical_bucket=%d distance_bucket=%d tolerance=%.3f motor_allowed=%d gates paused=%d battery=%.3f ap_cutout=%.3f elec_cutout=%.3f", target_position, ((int)physical_position + 5) / 10 * 10, ((int)distance + 5) / 10 * 10, TQ_TRIM_SYNC_TOLERANCE_COUNTS, motor_allowed, acData.paused, acData.battery_on, acData.ap_trim_pos, acData.el_trim_pos);
 		pokeys_set_trim_manual_command(0, 0);
 		pokeys_set_trim_indicator_target(target_position, 1);
-		if (g_trim_motor_variant == 3U && !g_v3_trim_startup_position_accepted && !v3_trim_position_valid)
+		if (g_trim_motor_variant == 3U && !g_v3_trim_startup_position_accepted && ((!g_v3_trim_position_warning_shown && !v3_trim_startup_position_valid) || (g_v3_trim_position_warning_shown && !v3_trim_recovery_position_valid)))
 		{
-			manual_direction = physical_position > TQ_V3_TRIM_STARTUP_MAX ? "NOSE DOWN" : "NOSE UP";
+			manual_direction = physical_position > TQ_TRIM_POSITION_MAX ? "NOSE DOWN" : "NOSE UP";
 			pokeys_set_trim_target(target_position, 0);
 			g_last_trim_sequence = positions.sequence;
 			g_last_trim_position = physical_position;
 			g_last_simulator_trim = simulator_before;
 			if (!g_v3_trim_position_warning_shown)
 			{
-				snprintf(trim_position_message, sizeof(trim_position_message), "The trim wheel is outside the safe startup position range.\n\nSwitch off the trim motor using the MAIN ELEC cutout switch. Manually rotate the trim wheel in the %s direction until it is within the valid range.\n\nCurrent position: %u\nValid startup range: %u to %u\n\nSelect OK after repositioning the trim wheel.", manual_direction, (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX);
+				snprintf(trim_position_message, sizeof(trim_position_message), "The trim wheel is outside the permitted operating limits of 400 to 3695.\n\nSwitch off the trim motor using the MAIN ELEC cutout switch. Manually rotate the trim wheel in the %s direction until it is within the required recovery range.\n\nCurrent position: %u\nRequired recovery range: %u to %u\n\nSelect OK after repositioning the trim wheel.", manual_direction, (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_RECOVERY_MIN, (unsigned int)TQ_V3_TRIM_RECOVERY_MAX);
 				g_v3_trim_position_warning_shown = 1;
-				log_write("V3 trim-wheel startup position %u is outside %u..%u; manual movement required in the %s direction", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX, manual_direction);
+				log_write("V3 trim-wheel startup position %u is outside %u..%u; manual movement in the %s direction is required until feedback reaches %u..%u", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_TRIM_POSITION_MIN, (unsigned int)TQ_TRIM_POSITION_MAX, manual_direction, (unsigned int)TQ_V3_TRIM_RECOVERY_MIN, (unsigned int)TQ_V3_TRIM_RECOVERY_MAX);
 				MessageBoxA(NULL, trim_position_message, "xpCFY_TQ - Reposition V3 Trim Wheel", MB_OK | MB_ICONWARNING | MB_TASKMODAL | MB_SETFOREGROUND);
 			}
 			return;
@@ -1323,9 +1324,9 @@ static void ProcessTqTrim(void)
 			g_v3_trim_startup_position_accepted = 1;
 			if (g_v3_trim_position_warning_shown && !g_v3_trim_position_valid_shown)
 			{
-				snprintf(trim_position_message, sizeof(trim_position_message), "The trim wheel is now within the safe startup position range.\n\nCurrent position: %u\nValid startup range: %u to %u\n\nTrim-wheel synchronisation can now continue.", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX);
+				snprintf(trim_position_message, sizeof(trim_position_message), "The trim wheel is now within the required recovery range.\n\nCurrent position: %u\nRequired recovery range: %u to %u\n\nTrim-wheel synchronisation can now continue.", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_RECOVERY_MIN, (unsigned int)TQ_V3_TRIM_RECOVERY_MAX);
 				g_v3_trim_position_valid_shown = 1;
-				log_write("V3 trim-wheel startup position %u is now within %u..%u; synchronisation continuing", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX);
+				log_write("V3 trim-wheel recovery position %u is now within %u..%u; synchronisation continuing", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_RECOVERY_MIN, (unsigned int)TQ_V3_TRIM_RECOVERY_MAX);
 				MessageBoxA(NULL, trim_position_message, "xpCFY_TQ - V3 Trim Wheel Position Valid", MB_OK | MB_ICONINFORMATION | MB_TASKMODAL | MB_SETFOREGROUND);
 			}
 		}
