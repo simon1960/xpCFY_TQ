@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: acf_dref.c                                                          */
-/*   VERSION: 1.0.4                                                                 */
+/*   VERSION: 1.0.5                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -10,7 +10,9 @@
 
 /* standard include files */
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
+#include <Windows.h>
 
 /* project include files*/
 #include "datastructures.h"
@@ -20,7 +22,27 @@
 #include "XPLMProcessing.h"
 
 /* global variables */
-TQAircraftData	acData;																				// aircraft data block
+static int g_enhanced_trim_logging;
+static unsigned long g_trim_trace_generation;
+#define TRIM_TRACE(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+do                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \
+	if (g_enhanced_trim_logging)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \
+	{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+		static char trim_trace_previous[2048];                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+		static unsigned long trim_trace_previous_generation;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+		char trim_trace_current[2048];                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     \
+		int trim_trace_count = snprintf(trim_trace_current, sizeof(trim_trace_current), __VA_ARGS__);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+		if (trim_trace_count >= 0 && (trim_trace_previous_generation != g_trim_trace_generation || strcmp(trim_trace_previous, trim_trace_current) != 0))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+		{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+			strcpy_s(trim_trace_previous, sizeof(trim_trace_previous), trim_trace_current);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+			trim_trace_previous_generation = g_trim_trace_generation;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+			log_write("TRIM TRACE: %s", trim_trace_current);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+		}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+	}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+} while (0)
+
+TQAircraftData acData;																				// aircraft data block
 
 /*
  * Lever input processing is owned by X-Plane's flight-loop thread. The
@@ -32,10 +54,10 @@ TQAircraftData	acData;																				// aircraft data block
 
 typedef struct TqMovingAverage
 {
-	float				samples[TQ_MOVING_AVERAGE_SAMPLES];
-	float				total;
-	uint32_t			next;
-	int					initialised;
+	float samples[TQ_MOVING_AVERAGE_SAMPLES];
+	float total;
+	uint32_t next;
+	int initialised;
 } TqMovingAverage;
 
 /*
@@ -46,67 +68,71 @@ typedef struct TqMovingAverage
  */
 typedef struct TqFlapsFilter
 {
-	float				samples[TQ_FLAPS_FILTER_SAMPLES];
-	float				average;
-	uint32_t			next;
-	uint32_t			sample_count;
-	uint32_t			large_change_count;
-	int					initialised;
+	float samples[TQ_FLAPS_FILTER_SAMPLES];
+	float average;
+	uint32_t next;
+	uint32_t sample_count;
+	uint32_t large_change_count;
+	int initialised;
 } TqFlapsFilter;
 
-static TqCalibration	g_control_calibration;
-static int				g_control_calibration_valid;
-static uint64_t			g_last_lever_sequence;
-static TqMovingAverage	g_throttle_left_filter;
-static TqMovingAverage	g_throttle_right_filter;
-static TqMovingAverage	g_speedbrake_filter;
-static TqMovingAverage	g_trim_filter;
-static TqMovingAverage	g_reverser_left_filter;
-static TqMovingAverage	g_reverser_right_filter;
-static TqFlapsFilter	g_flaps_filter;
-static float			g_last_throttle_left_written;
-static float			g_last_throttle_right_written;
-static float			g_last_speedbrake_written;
-static int				g_throttle_left_written;
-static int				g_throttle_right_written;
-static int				g_speedbrake_written;
-static float			g_physical_throttle_left;
-static float			g_physical_throttle_right;
-static int				g_physical_throttle_positions_valid;
-static int				g_reverser_left_active;
-static int				g_reverser_right_active;
-static int				g_last_flaps_detent;
-static int				g_flaps_written;
-static uint64_t			g_last_trim_sequence;
-static float			g_last_trim_position;
-static float			g_last_simulator_trim;
-static int				g_trim_input_initialised;
-static uint64_t			g_last_parking_brake_switch_sequence;
-static int				g_last_parking_brake_interlock_request = POKEYS_PARKING_BRAKE_UNKNOWN;
-static int				g_parking_brake_input_initialised;
-static int				g_parking_brake_toe_release_armed;
-static uint64_t			g_last_fuel_cutoff_sequence;
-static uint64_t			g_last_trim_cutout_sequence;
-static int				g_trim_cutout_electric_commanded;
-static int				g_trim_cutout_autopilot_commanded;
-static float			g_trim_cutout_electric_command_time;
-static float			g_trim_cutout_autopilot_command_time;
-static int				g_trim_cutout_waiting_for_guards;
-static int				g_trim_first_run_active;
-static int				g_manual_trim_command_direction;
-static int				g_last_trim_dataref_direction;
-static int				g_toga_selected_since_at_arm;
-static int				g_manual_throttle_disconnect_pending;
-static int				g_unowned_throttle_tracking;
-static float			g_unowned_throttle_left_reference;
-static float			g_unowned_throttle_right_reference;
-static int				g_last_speedbrake_state;
-static int				g_speedbrake_ground_state_initialised;
-static int				g_speedbrake_was_on_ground;
-static int				g_speedbrake_auto_extend_issued;
-static int				g_speedbrake_auto_retract_issued;
-static float			g_speedbrake_touchdown_time;
-static uint32_t			g_first_run_pending;
+static TqCalibration g_control_calibration;
+static int g_control_calibration_valid;
+static uint64_t g_last_lever_sequence;
+static TqMovingAverage g_throttle_left_filter;
+static TqMovingAverage g_throttle_right_filter;
+static TqMovingAverage g_speedbrake_filter;
+static TqMovingAverage g_trim_filter;
+static TqMovingAverage g_reverser_left_filter;
+static TqMovingAverage g_reverser_right_filter;
+static TqFlapsFilter g_flaps_filter;
+static float g_last_throttle_left_written;
+static float g_last_throttle_right_written;
+static float g_last_speedbrake_written;
+static int g_throttle_left_written;
+static int g_throttle_right_written;
+static int g_speedbrake_written;
+static float g_physical_throttle_left;
+static float g_physical_throttle_right;
+static int g_physical_throttle_positions_valid;
+static int g_reverser_left_active;
+static int g_reverser_right_active;
+static int g_last_flaps_detent;
+static int g_flaps_written;
+static uint64_t g_last_trim_sequence;
+static float g_last_trim_position;
+static float g_last_simulator_trim;
+static int g_trim_input_initialised;
+static uint64_t g_last_parking_brake_switch_sequence;
+static int g_last_parking_brake_interlock_request = POKEYS_PARKING_BRAKE_UNKNOWN;
+static int g_parking_brake_input_initialised;
+static int g_parking_brake_toe_release_armed;
+static uint64_t g_last_fuel_cutoff_sequence;
+static uint64_t g_last_trim_cutout_sequence;
+static int g_trim_cutout_electric_commanded;
+static int g_trim_cutout_autopilot_commanded;
+static float g_trim_cutout_electric_command_time;
+static float g_trim_cutout_autopilot_command_time;
+static int g_trim_cutout_waiting_for_guards;
+static int g_trim_first_run_active;
+static uint32_t g_trim_motor_variant = 4U;
+static int g_v3_trim_position_warning_shown;
+static int g_v3_trim_position_valid_shown;
+static int g_v3_trim_startup_position_accepted;
+static int g_manual_trim_command_direction;
+static int g_last_trim_dataref_direction;
+static int g_toga_selected_since_at_arm;
+static int g_manual_throttle_disconnect_pending;
+static int g_unowned_throttle_tracking;
+static float g_unowned_throttle_left_reference;
+static float g_unowned_throttle_right_reference;
+static int g_last_speedbrake_state;
+static int g_speedbrake_ground_state_initialised;
+static int g_speedbrake_was_on_ground;
+static int g_speedbrake_auto_extend_issued;
+static int g_speedbrake_auto_retract_issued;
+static float g_speedbrake_touchdown_time;
+static uint32_t g_first_run_pending;
 
 /*
  * set after CMD_PB_SET begins and retained until a following read pass reports
@@ -115,45 +141,47 @@ static uint32_t			g_first_run_pending;
  * value.
  */
 
-static int				g_parking_brake_set_awaiting_simulator;
-static float			g_parking_brake_set_started_at;
-static int				g_parking_brake_set_timeout_logged;
-static int				g_parking_brake_set_command_active;
-static int				g_parking_brake_release_state;
+static int g_parking_brake_set_awaiting_simulator;
+static float g_parking_brake_set_started_at;
+static int g_parking_brake_set_timeout_logged;
+static int g_parking_brake_set_command_active;
+static int g_parking_brake_release_state;
 
 /* Original FSUIPC pedal thresholds converted from 0..16383 to X-Plane 0..1. */
-#define TQ_PARKING_BRAKE_PEDALS_HIGH				(4000.0f / 16383.0f)
-#define TQ_PARKING_BRAKE_PEDALS_LOW					(2000.0f / 16383.0f)
-#define TQ_PARKING_BRAKE_MAX_GROUND_SPEED_MPS		1.0f
-#define TQ_PARKING_BRAKE_CONFIRM_TIMEOUT_SECONDS	2.0f
+#define TQ_PARKING_BRAKE_PEDALS_HIGH (4000.0f / 16383.0f)
+#define TQ_PARKING_BRAKE_PEDALS_LOW (2000.0f / 16383.0f)
+#define TQ_PARKING_BRAKE_MAX_GROUND_SPEED_MPS 1.0f
+#define TQ_PARKING_BRAKE_CONFIRM_TIMEOUT_SECONDS 2.0f
 /* Original .NET idle latch: set below 500 counts, clear above 510 counts. */
-#define TQ_THROTTLE_IDLE_THRESHOLD					(500.0f / 4095.0f)
-#define TQ_REVERSER_ACTIVATE_THRESHOLD				(250.0f / 4095.0f)
-#define TQ_REVERSER_RELEASE_THRESHOLD				(150.0f / 4095.0f)
-#define TQ_REVERSER_FULL_SCALE						-2.0f
-#define TQ_THROTTLE_MANUAL_MOVEMENT_THRESHOLD		(65.0f / 4095.0f)
-#define TQ_THROTTLE_DATAREF_EPSILON					(0.5f / 4095.0f)
+#define TQ_THROTTLE_IDLE_THRESHOLD (500.0f / 4095.0f)
+#define TQ_REVERSER_ACTIVATE_THRESHOLD (250.0f / 4095.0f)
+#define TQ_REVERSER_RELEASE_THRESHOLD (150.0f / 4095.0f)
+#define TQ_REVERSER_FULL_SCALE -2.0f
+#define TQ_THROTTLE_MANUAL_MOVEMENT_THRESHOLD (65.0f / 4095.0f)
+#define TQ_THROTTLE_DATAREF_EPSILON (0.5f / 4095.0f)
 
-#define TQ_SPEEDBRAKE_DOWN_MAX_COUNTS				250U
-#define TQ_SPEEDBRAKE_ARM_MAX_COUNTS				1250U
-#define TQ_SPEEDBRAKE_UP_MIN_COUNTS					3218U
-#define TQ_SPEEDBRAKE_ARM_VALUE						0.0889f
-#define TQ_SPEEDBRAKE_FLIGHT_VALUE					0.667f
-#define TQ_SPEEDBRAKE_AUTO_RETRACT_DELAY_SECONDS	5.0f
-#define TQ_TRIM_POSITION_MIN						400.0f
-#define TQ_TRIM_POSITION_MAX						3695.0f
-#define TQ_TRIM_PHYSICAL_CHANGE_COUNTS				2.0f
-#define TQ_TRIM_SYNC_TOLERANCE_COUNTS				50.0f
-#define TQ_TRIM_SIM_CHANGE_EPSILON					0.000001f
-#define TQ_ZIBO_TRIM_SWITCH_LOW_MAX					0.25f
-#define TQ_ZIBO_TRIM_SWITCH_HIGH_MIN				0.75f
+#define TQ_SPEEDBRAKE_DOWN_MAX_COUNTS 250U
+#define TQ_SPEEDBRAKE_ARM_MAX_COUNTS 1250U
+#define TQ_SPEEDBRAKE_UP_MIN_COUNTS 3218U
+#define TQ_SPEEDBRAKE_ARM_VALUE 0.0889f
+#define TQ_SPEEDBRAKE_FLIGHT_VALUE 0.667f
+#define TQ_SPEEDBRAKE_AUTO_RETRACT_DELAY_SECONDS 5.0f
+#define TQ_TRIM_POSITION_MIN 400.0f
+#define TQ_TRIM_POSITION_MAX 3695.0f
+#define TQ_V3_TRIM_STARTUP_MIN 1059.0f
+#define TQ_V3_TRIM_STARTUP_MAX 3036.0f
+#define TQ_TRIM_PHYSICAL_CHANGE_COUNTS 2.0f
+#define TQ_TRIM_SYNC_TOLERANCE_COUNTS 50.0f
+#define TQ_TRIM_SIM_CHANGE_EPSILON 0.000001f
+#define TQ_ZIBO_TRIM_SWITCH_LOW_MAX 0.25f
+#define TQ_ZIBO_TRIM_SWITCH_HIGH_MIN 0.75f
 
 /* original generic/XPUIPC mapping: -16383..12312 -> 0..4095 counts. */
-#define TQ_TRIM_SIM_MIN								-1.0f
-#define TQ_TRIM_SIM_MAX								(12312.0f / 16383.0f)
-#define TQ_SWITCH_COMMAND_RETRY_SECONDS				0.5f
-#define TQ_HANDLE_RETRY_SECONDS						1.0f
-#define TQ_FLAPS_DATAREF_EPSILON					0.0001f
+#define TQ_TRIM_SIM_MIN -1.0f
+#define TQ_TRIM_SIM_MAX (12312.0f / 16383.0f)
+#define TQ_SWITCH_COMMAND_RETRY_SECONDS 0.5f
+#define TQ_HANDLE_RETRY_SECONDS 1.0f
+#define TQ_FLAPS_DATAREF_EPSILON 0.0001f
 
 /* various states for speedbrake and parking brake */
 enum TqSpeedbrakeState
@@ -189,30 +217,30 @@ enum TqFirstRunComponent
  */
 typedef struct TqTrimCommandBinding
 {
-	const char*		name;
-	XPLMCommandRef	handle;
-	int				direction;
-	int				active;
+	const char* name;
+	XPLMCommandRef handle;
+	int direction;
+	int active;
 } TqTrimCommandBinding;
 
 static TqTrimCommandBinding g_trim_command_bindings[] =
 {
 	/* Physical yoke assignments reported from the test installation. */
-	{ "sim/flight_controls/pitch_trim_down_elec", NULL, -1, 0 },
-	{ "sim/flight_controls/pitch_trim_up_elec", NULL, 1, 0 },
+	{"sim/flight_controls/pitch_trim_down_elec", NULL, -1, 0},
+	{"sim/flight_controls/pitch_trim_up_elec", NULL, 1, 0},
 	/* Zibo Captain and First Officer wrappers used by its flight-control code. */
-	{ "laminar/B738/flight_controls/pitch_trim_down", NULL, -1, 0 },
-	{ "laminar/B738/flight_controls/pitch_trim_up", NULL, 1, 0 },
-	{ "laminar/B738/flight_controls/fo_pitch_trim_down", NULL, -1, 0 },
-	{ "laminar/B738/flight_controls/fo_pitch_trim_up", NULL, 1, 0 },
+	{"laminar/B738/flight_controls/pitch_trim_down", NULL, -1, 0},
+	{"laminar/B738/flight_controls/pitch_trim_up", NULL, 1, 0},
+	{"laminar/B738/flight_controls/fo_pitch_trim_down", NULL, -1, 0},
+	{"laminar/B738/flight_controls/fo_pitch_trim_up", NULL, 1, 0},
 	/* Native X-Plane commands retained for non-wrapped and direct assignments. */
-	{ "sim/flight_controls/pitch_trim_down", NULL, -1, 0 },
-	{ "sim/flight_controls/pitch_trim_up", NULL, 1, 0 },
-	{ "sim/flight_controls/pitch_trimA_down", NULL, -1, 0 },
-	{ "sim/flight_controls/pitch_trimA_up", NULL, 1, 0 },
-	{ "sim/flight_controls/pitch_trimB_down", NULL, -1, 0 },
-	{ "sim/flight_controls/pitch_trimB_up", NULL, 1, 0 }
-};
+	{"sim/flight_controls/pitch_trim_down", NULL, -1, 0},
+	{"sim/flight_controls/pitch_trim_up", NULL, 1, 0},
+	{"sim/flight_controls/pitch_trimA_down", NULL, -1, 0},
+	{"sim/flight_controls/pitch_trimA_up", NULL, 1, 0},
+	{"sim/flight_controls/pitch_trimB_down", NULL, -1, 0},
+	{"sim/flight_controls/pitch_trimB_up", NULL, 1, 0}};
+
 static int g_trim_command_handlers_registered;
 static int g_aircraft_active;
 static int g_aircraft_data_valid;
@@ -228,13 +256,16 @@ static TqDatarefLogState g_dataref_log_state[DREF_END];
 
 #define TQ_FIRST_RUN_ALL (TQ_FIRST_RUN_PARKING_BRAKE | TQ_FIRST_RUN_FUEL_CUTOFFS | TQ_FIRST_RUN_TRIM_CUTOUTS | TQ_FIRST_RUN_TRIM_POSITION | TQ_FIRST_RUN_FLAPS)
 
-/* Log the initial value and subsequent changes without flooding the 100 Hz FLCB log. */
+/* Log the initial value and subsequent changes without flooding the TQ log. */
 static void LogDatarefStateChange(dataRefLine line, const char* description, double value)
 {
 	TqDatarefLogState* state = &g_dataref_log_state[line];
-	if (drefTable[line].handle == NULL) return;
-	if (!state->initialised) log_write("%s initial state: %.3f", description, value);
-	else if (state->previous_value != value) log_write("%s changed: %.3f -> %.3f", description, state->previous_value, value);
+	if (drefTable[line].handle == NULL)
+		return;
+	if (!state->initialised)
+		log_write("%s initial state: %.3f", description, value);
+	else if (state->previous_value != value)
+		log_write("%s changed: %.3f -> %.3f", description, state->previous_value, value);
 	state->previous_value = value;
 	state->initialised = 1;
 }
@@ -261,8 +292,10 @@ static void first_run_component_complete(uint32_t component, const char* descrip
 
 static float clamp_unit(float value)
 {
-	if (value < 0.0f) return (0.0f);
-	if (value > 1.0f) return (1.0f);
+	if (value < 0.0f)
+		return (0.0f);
+	if (value > 1.0f)
+		return (1.0f);
 	return (value);
 }
 
@@ -285,14 +318,14 @@ static float moving_average_add(TqMovingAverage* filter, float sample)
 		filter->total = sample * (float)TQ_MOVING_AVERAGE_SAMPLES;
 		filter->next = 0;
 		filter->initialised = 1;
-		return(sample);
+		return (sample);
 	}
 
 	filter->total -= filter->samples[filter->next];
 	filter->samples[filter->next] = sample;
 	filter->total += sample;
 	filter->next = (filter->next + 1U) % TQ_MOVING_AVERAGE_SAMPLES;
-	return(filter->total / (float)TQ_MOVING_AVERAGE_SAMPLES);
+	return (filter->total / (float)TQ_MOVING_AVERAGE_SAMPLES);
 }
 
 static float absolute_difference(float left, float right)
@@ -382,8 +415,10 @@ static uint32_t flaps_corrected_position(float raw_position)
 	uint32_t minimum = g_control_calibration.flaps_min_position;
 	uint32_t maximum = g_control_calibration.flaps_max_position;
 
-	if (maximum <= minimum || raw_position <= (float)minimum) return (0U);
-	if (raw_position >= (float)maximum) return (4095U);
+	if (maximum <= minimum || raw_position <= (float)minimum)
+		return (0U);
+	if (raw_position >= (float)maximum)
+		return (4095U);
 	corrected = (raw_position - (float)minimum) * 4095.0f / (float)(maximum - minimum);
 	return ((uint32_t)corrected);
 }
@@ -391,14 +426,22 @@ static uint32_t flaps_corrected_position(float raw_position)
 /* Original corrected-position bands for UP, 1, 2, 5, 10, 15, 25, 30, 40. */
 static int flaps_position_to_detent(uint32_t position)
 {
-	if (position <= 200U) return (0);
-	if (position <= 900U) return (1);
-	if (position <= 1300U) return (2);
-	if (position <= 1950U) return (3);
-	if (position <= 2400U) return (4);
-	if (position <= 2900U) return (5);
-	if (position <= 3300U) return (6);
-	if (position <= 3900U) return (7);
+	if (position <= 200U)
+		return (0);
+	if (position <= 900U)
+		return (1);
+	if (position <= 1300U)
+		return (2);
+	if (position <= 1950U)
+		return (3);
+	if (position <= 2400U)
+		return (4);
+	if (position <= 2900U)
+		return (5);
+	if (position <= 3300U)
+		return (6);
+	if (position <= 3900U)
+		return (7);
 	return (8);
 }
 
@@ -411,21 +454,23 @@ static int flaps_position_to_detent(uint32_t position)
  */
 static int begin_parking_brake_set_command(void)
 {
-	if (g_parking_brake_set_command_active) return(1);
+	if (g_parking_brake_set_command_active)
+		return (1);
 	if (cmdTable[CMD_PB_SET].handle == NULL)
 	{
 		log_write("Parking-brake SET command unavailable: CMD_PB_SET has no handle");
-		return(0);
+		return (0);
 	}
 	XPLMCommandBegin(cmdTable[CMD_PB_SET].handle);
 	g_parking_brake_set_command_active = 1;
 	log_write("Parking-brake SET command begun; holding until simulator lamp acknowledgement");
-	return(1);
+	return (1);
 }
 
 static void end_parking_brake_set_command(const char* reason)
 {
-	if (!g_parking_brake_set_command_active) return;
+	if (!g_parking_brake_set_command_active)
+		return;
 	if (cmdTable[CMD_PB_SET].handle != NULL)
 		XPLMCommandEnd(cmdTable[CMD_PB_SET].handle);
 	g_parking_brake_set_command_active = 0;
@@ -447,16 +492,16 @@ static int ensure_parking_brake_released(void)
 	if (acData.parking_brake < 0.5f)
 	{
 		log_write("Parking-brake simulator state already released; CMD_PB_SET pulse suppressed");
-		return(1);
+		return (1);
 	}
 	if (cmdTable[CMD_PB_SET].handle == NULL)
 	{
 		log_write("Parking-brake release command unavailable: CMD_PB_SET has no handle");
-		return(0);
+		return (0);
 	}
 	XPLMCommandOnce(cmdTable[CMD_PB_SET].handle);
 	log_write("Parking-brake physical switch released: CMD_PB_SET pulsed once to clear X-Plane internal brake state");
-	return(1);
+	return (1);
 }
 
 static void update_manual_trim_command_direction(void)
@@ -466,26 +511,31 @@ static void update_manual_trim_command_direction(void)
 	int down = 0;
 	for (index = 0; index < sizeof(g_trim_command_bindings) / sizeof(g_trim_command_bindings[0]); ++index)
 	{
-		if (!g_trim_command_bindings[index].active) 
+		if (!g_trim_command_bindings[index].active)
 			continue;
 		if (g_trim_command_bindings[index].direction > 0)
 			up = 1;
-		if (g_trim_command_bindings[index].direction < 0) 
+		if (g_trim_command_bindings[index].direction < 0)
 			down = 1;
 	}
 	/* Opposing commands cancel, matching a neutral three-state switch input. */
 	g_manual_trim_command_direction = up == down ? 0 : (up ? 1 : -1);
+	TRIM_TRACE("EXIT update_manual_trim_command_direction up=%d down=%d command_direction=%d", up, down, g_manual_trim_command_direction);
 }
 
 static int tq_trim_command_handler(XPLMCommandRef command, XPLMCommandPhase phase, void* refcon)
 {
 	TqTrimCommandBinding* binding = (TqTrimCommandBinding*)refcon;
 	int motor_allowed;
+	TRIM_TRACE("ENTER tq_trim_command_handler command=%p phase=%d binding=%p first_run=%d ap=%.3f paused=%d battery=%.3f elec_cutout=%.3f", (void*)command, (int)phase, refcon, g_trim_first_run_active, acData.ap_engaged, acData.paused, acData.battery_on, acData.el_trim_pos);
 
 	(void)command;
 
-	if (binding == NULL) 
-		return(1);
+	if (binding == NULL)
+	{
+		TRIM_TRACE("EXIT tq_trim_command_handler result=1 reason=null_binding");
+		return (1);
+	}
 	binding->active = phase != xplm_CommandEnd;
 	update_manual_trim_command_direction();
 	/*
@@ -497,21 +547,44 @@ static int tq_trim_command_handler(XPLMCommandRef command, XPLMCommandPhase phas
 	if (!g_trim_first_run_active && acData.ap_engaged < 0.5)
 	{
 		motor_allowed = acData.paused == 0 && acData.battery_on != 0.0 && acData.el_trim_pos < 0.5f;
+		TRIM_TRACE("manual command publish name=%s active=%d direction=%d motor_allowed=%d", binding->name, binding->active, g_manual_trim_command_direction, motor_allowed);
 		pokeys_set_trim_target(0U, 0);
-		pokeys_set_trim_manual_command(g_manual_trim_command_direction,	motor_allowed);
+		pokeys_set_trim_manual_command(g_manual_trim_command_direction, motor_allowed);
 	}
 	else if (acData.ap_engaged >= 0.5)
 	{
+		TRIM_TRACE("manual command inhibited by autopilot name=%s active=%d direction=%d", binding->name, binding->active, g_manual_trim_command_direction);
 		pokeys_set_trim_manual_command(0, 0);
 	}
 	/* Observe only: X-Plane and Zibo must still receive and act on the command. */
-	return(1);
+	TRIM_TRACE("EXIT tq_trim_command_handler result=1 command_direction=%d", g_manual_trim_command_direction);
+	return (1);
+}
+
+void TqControlsSetEnhancedTrimLogging(int enabled)
+{
+	g_enhanced_trim_logging = enabled != 0;
+	++g_trim_trace_generation;
+	log_write("Enhanced trim logging %s for X-Plane trim control", g_enhanced_trim_logging ? "enabled" : "disabled");
+}
+
+void TqControlsSetTrimMotorVariant(uint32_t variant)
+{
+	g_trim_motor_variant = variant;
+	g_v3_trim_position_warning_shown = 0;
+	g_v3_trim_position_valid_shown = 0;
+	g_v3_trim_startup_position_accepted = 0;
 }
 
 void UnregisterTqTrimCommandHandlers(void)
 {
 	size_t index;
-	if (!g_trim_command_handlers_registered) return;
+	TRIM_TRACE("ENTER UnregisterTqTrimCommandHandlers registered=%d direction=%d", g_trim_command_handlers_registered, g_manual_trim_command_direction);
+	if (!g_trim_command_handlers_registered)
+	{
+		TRIM_TRACE("EXIT UnregisterTqTrimCommandHandlers reason=not_registered");
+		return;
+	}
 	for (index = 0; index < sizeof(g_trim_command_bindings) / sizeof(g_trim_command_bindings[0]); ++index)
 	{
 		TqTrimCommandBinding* binding = &g_trim_command_bindings[index];
@@ -523,11 +596,13 @@ void UnregisterTqTrimCommandHandlers(void)
 	g_trim_command_handlers_registered = 0;
 	g_manual_trim_command_direction = 0;
 	pokeys_set_trim_manual_command(0, 0);
+	TRIM_TRACE("EXIT UnregisterTqTrimCommandHandlers registered=%d direction=%d", g_trim_command_handlers_registered, g_manual_trim_command_direction);
 }
 
 static void RegisterTqTrimCommandHandlers(void)
 {
 	size_t index;
+	TRIM_TRACE("ENTER RegisterTqTrimCommandHandlers");
 	UnregisterTqTrimCommandHandlers();
 	for (index = 0; index < sizeof(g_trim_command_bindings) / sizeof(g_trim_command_bindings[0]); ++index)
 	{
@@ -539,15 +614,17 @@ static void RegisterTqTrimCommandHandlers(void)
 			log_write("Unable to find manual trim command %s", binding->name);
 			continue;
 		}
-		XPLMRegisterCommandHandler(binding->handle,	tq_trim_command_handler, 1, binding);
+		XPLMRegisterCommandHandler(binding->handle, tq_trim_command_handler, 1, binding);
 	}
 	g_trim_command_handlers_registered = 1;
 	update_manual_trim_command_direction();
 	log_write("Manual trim command monitoring registered, including X-Plane electrical yoke trim commands");
+	TRIM_TRACE("EXIT RegisterTqTrimCommandHandlers registered=%d direction=%d", g_trim_command_handlers_registered, g_manual_trim_command_direction);
 }
 
 void TqControlsReset(void)
 {
+	TRIM_TRACE("ENTER TqControlsReset position=%.3f simulator=%.6f input_initialised=%d first_run=%d command_direction=%d dataref_direction=%d", g_last_trim_position, g_last_simulator_trim, g_trim_input_initialised, g_trim_first_run_active, g_manual_trim_command_direction, g_last_trim_dataref_direction);
 	end_parking_brake_set_command("TQ controls reset");
 	pokeys_set_trim_target(0U, 0);
 	pokeys_set_trim_manual_command(0, 0);
@@ -593,6 +670,9 @@ void TqControlsReset(void)
 	g_trim_cutout_autopilot_command_time = 0.0f;
 	g_trim_cutout_waiting_for_guards = 0;
 	g_trim_first_run_active = 1;
+	g_v3_trim_position_warning_shown = 0;
+	g_v3_trim_position_valid_shown = 0;
+	g_v3_trim_startup_position_accepted = 0;
 	g_manual_trim_command_direction = 0;
 	g_last_trim_dataref_direction = 0;
 	g_toga_selected_since_at_arm = 0;
@@ -610,19 +690,24 @@ void TqControlsReset(void)
 	g_aircraft_data_valid = 0;
 	g_next_handle_retry_time = 0.0f;
 	log_write("First Run started: waiting for simulator data and valid TQ inputs");
+	TRIM_TRACE("EXIT TqControlsReset position=%.3f simulator=%.6f input_initialised=%d first_run=%d command_direction=%d dataref_direction=%d", g_last_trim_position, g_last_simulator_trim, g_trim_input_initialised, g_trim_first_run_active, g_manual_trim_command_direction, g_last_trim_dataref_direction);
 }
 
 void TqControlsSetCalibration(const TqCalibration* calibration, int valid)
 {
-	if (calibration != NULL) g_control_calibration = *calibration;
+	TRIM_TRACE("ENTER TqControlsSetCalibration calibration=%p valid=%d trim_min_speed=%u", (void*)calibration, valid, calibration != NULL ? calibration->trim_min_speed : 0U);
+	if (calibration != NULL)
+		g_control_calibration = *calibration;
 	g_control_calibration_valid = valid != 0;
 	pokeys_set_trim_min_speed(valid && calibration != NULL ? calibration->trim_min_speed : 0U);
 	TqControlsReset();
+	TRIM_TRACE("EXIT TqControlsSetCalibration calibration_valid=%d stored_trim_min_speed=%u", g_control_calibration_valid, g_control_calibration.trim_min_speed);
 }
 
 /* Stop every simulator/hardware ownership path without starting a new First Run. */
 void TqControlsDeactivate(void)
 {
+	TRIM_TRACE("ENTER TqControlsDeactivate first_run=%d command_direction=%d dataref_direction=%d", g_trim_first_run_active, g_manual_trim_command_direction, g_last_trim_dataref_direction);
 	end_parking_brake_set_command("TQ controls deactivated");
 	pokeys_set_trim_target(0U, 0);
 	pokeys_set_trim_manual_command(0, 0);
@@ -632,16 +717,16 @@ void TqControlsDeactivate(void)
 	g_first_run_pending = 0U;
 	g_trim_first_run_active = 1;
 	TqControlsSetAircraftActive(0);
+	TRIM_TRACE("EXIT TqControlsDeactivate first_run=%d command_direction=%d dataref_direction=%d", g_trim_first_run_active, g_manual_trim_command_direction, g_last_trim_dataref_direction);
 }
 
-/* 
+/*
  * check the aircraft is on the ground and the battery master is off
  * before we allow any motorised test runs (e.g. speedbrake, throttles)
  */
 int TqGroundTestControlsAllowed(void)
 {
-	return (g_aircraft_active && g_aircraft_data_valid &&
-		acData.battery_on == 0.0f && acData.on_ground != 0);
+	return (g_aircraft_active && g_aircraft_data_valid && acData.battery_on == 0.0f && acData.on_ground != 0);
 }
 
 /*
@@ -660,7 +745,8 @@ void TqControlsSetAircraftActive(int active)
 	 */
 	pokeys_set_simulator_aircraft_active(g_aircraft_active);
 	g_aircraft_data_valid = 0;
-	if (g_aircraft_active) return;
+	if (g_aircraft_active)
+		return;
 
 	memset(g_dataref_log_state, 0, sizeof(g_dataref_log_state));
 	memset(&acData, 0, sizeof(acData));
@@ -674,18 +760,18 @@ static int set_float_dataref(dataRefLine line, float value)
 {
 	drefTable_p entry = &drefTable[line];
 
-	if (entry->handle == NULL || !entry->isWriteable) 
-		return(0);
-	
+	if (entry->handle == NULL || !entry->isWriteable)
+		return (0);
+
 	if (entry->isArray)
 		XPLMSetDatavf(entry->handle, &value, entry->arrayOffset, 1);
 	else
 		XPLMSetDataf(entry->handle, value);
 	entry->value.fltData = value;
 
-	if (entry->ptrVal != NULL) 
+	if (entry->ptrVal != NULL)
 		*(float*)entry->ptrVal = value;
-	return(1);
+	return (1);
 }
 
 /*
@@ -696,12 +782,12 @@ static int set_float_dataref(dataRefLine line, float value)
 static void request_parking_brake_interlock(int requested_state)
 {
 	int accepted;
-	if (requested_state == g_last_parking_brake_interlock_request && pokeys_get_parking_brake_state() == requested_state) 
+	if (requested_state == g_last_parking_brake_interlock_request && pokeys_get_parking_brake_state() == requested_state)
 		return;
-	
-	accepted = requested_state == POKEYS_PARKING_BRAKE_SET ? pokeys_parking_brake_interlock_set() :	pokeys_parking_brake_interlock_release();
-	
-	if (accepted) 
+
+	accepted = requested_state == POKEYS_PARKING_BRAKE_SET ? pokeys_parking_brake_interlock_set() : pokeys_parking_brake_interlock_release();
+
+	if (accepted)
 		g_last_parking_brake_interlock_request = requested_state;
 }
 
@@ -757,7 +843,7 @@ static void ProcessTqParkingBrake(void)
 				return;
 			if (!simulator_indicator_set)
 			{
-				if (!begin_parking_brake_set_command()) 
+				if (!begin_parking_brake_set_command())
 					return;
 				g_parking_brake_set_awaiting_simulator = 1;
 				g_parking_brake_set_started_at = now;
@@ -767,10 +853,10 @@ static void ProcessTqParkingBrake(void)
 		else
 		{
 			request_parking_brake_interlock(POKEYS_PARKING_BRAKE_RELEASED);
-			if (pokeys_get_parking_brake_state() !=	POKEYS_PARKING_BRAKE_RELEASED)
+			if (pokeys_get_parking_brake_state() != POKEYS_PARKING_BRAKE_RELEASED)
 				return;
 			/* Do not toggle an already-released simulator on First Run. */
-			if (acData.parking_brake >= 0.5f &&	!ensure_parking_brake_released())
+			if (acData.parking_brake >= 0.5f && !ensure_parking_brake_released())
 				return;
 		}
 		g_parking_brake_input_initialised = 1;
@@ -779,7 +865,7 @@ static void ProcessTqParkingBrake(void)
 		g_parking_brake_toe_release_armed = 0;
 		if (!input.engaged || simulator_indicator_set)
 			first_run_component_complete(TQ_FIRST_RUN_PARKING_BRAKE, "parking-brake switch and interlock");
-		
+
 		log_write("Parking-brake First Run synchronised from hardware: switch %s", input.engaged ? "set" : "released");
 		return;
 	}
@@ -791,8 +877,7 @@ static void ProcessTqParkingBrake(void)
 	 */
 	if (g_parking_brake_release_state != TQ_PB_RELEASE_IDLE)
 	{
-		if (g_parking_brake_release_state ==
-			TQ_PB_RELEASE_WAITING_FOR_SWITCH)
+		if (g_parking_brake_release_state == TQ_PB_RELEASE_WAITING_FOR_SWITCH)
 		{
 			if (input.engaged)
 			{
@@ -804,14 +889,14 @@ static void ProcessTqParkingBrake(void)
 			 * Wait for the next completed dataref read before deciding whether a
 			 * toggle is needed. This lets X-Plane's toe-release response settle.
 			 */
-			g_parking_brake_release_state =
-				TQ_PB_RELEASE_VERIFYING_SIMULATOR;
+			g_parking_brake_release_state = TQ_PB_RELEASE_VERIFYING_SIMULATOR;
 			g_last_parking_brake_switch_sequence = input.sequence;
 			log_write("Parking-brake physical switch released; verifying simulator state on next flight-loop update");
 			return;
 		}
 
-		if (!ensure_parking_brake_released()) return;
+		if (!ensure_parking_brake_released())
+			return;
 		g_parking_brake_release_state = TQ_PB_RELEASE_IDLE;
 		log_write("Parking-brake toe release completed after physical switch release");
 		return;
@@ -822,9 +907,9 @@ static void ProcessTqParkingBrake(void)
 	 * holding X-Plane's CMD_PB_SET command until lamp acknowledgement.
 	 * On a RELEASE edge, pulse the simulator command and release the interlock.
 	 */
-	if (input.sequence != g_last_parking_brake_switch_sequence) 
+	if (input.sequence != g_last_parking_brake_switch_sequence)
 	{
-		if (input.engaged) 
+		if (input.engaged)
 		{
 			g_parking_brake_release_state = TQ_PB_RELEASE_IDLE;
 			request_parking_brake_interlock(POKEYS_PARKING_BRAKE_SET);
@@ -832,15 +917,16 @@ static void ProcessTqParkingBrake(void)
 				return;
 			if (!simulator_indicator_set)
 			{
-				if (!begin_parking_brake_set_command()) return;
+				if (!begin_parking_brake_set_command())
+					return;
 				g_parking_brake_set_awaiting_simulator = 1;
 				g_parking_brake_set_started_at = now;
 				g_parking_brake_set_timeout_logged = 0;
 			}
 			g_parking_brake_toe_release_armed = 0;
 			log_write("Parking-brake switch set: interlock confirmed; SET command held pending simulator lamp acknowledgement");
-		} 
-		else 
+		}
+		else
 		{
 			end_parking_brake_set_command("hardware parking-brake switch released");
 			g_parking_brake_release_state = TQ_PB_RELEASE_IDLE;
@@ -848,7 +934,8 @@ static void ProcessTqParkingBrake(void)
 			g_parking_brake_set_started_at = 0.0f;
 			g_parking_brake_set_timeout_logged = 0;
 			g_parking_brake_toe_release_armed = 0;
-			if (!ensure_parking_brake_released()) return;
+			if (!ensure_parking_brake_released())
+				return;
 			request_parking_brake_interlock(POKEYS_PARKING_BRAKE_RELEASED);
 			log_write("Parking-brake switch released: simulator release verified and interlock release requested");
 		}
@@ -865,9 +952,7 @@ static void ProcessTqParkingBrake(void)
 	if (both_pedals_low)
 		g_parking_brake_toe_release_armed = 1;
 
-	if (g_parking_brake_toe_release_armed && both_pedals_high &&
-		acData.on_ground != 0 &&
-		acData.groundspeed_mps < TQ_PARKING_BRAKE_MAX_GROUND_SPEED_MPS)
+	if (g_parking_brake_toe_release_armed && both_pedals_high && acData.on_ground != 0 && acData.groundspeed_mps < TQ_PARKING_BRAKE_MAX_GROUND_SPEED_MPS)
 	{
 		end_parking_brake_set_command("parking brake released by toe pedals");
 		g_parking_brake_toe_release_armed = 0;
@@ -876,12 +961,11 @@ static void ProcessTqParkingBrake(void)
 		g_parking_brake_set_timeout_logged = 0;
 		g_parking_brake_release_state = TQ_PB_RELEASE_WAITING_FOR_SWITCH;
 		request_parking_brake_interlock(POKEYS_PARKING_BRAKE_RELEASED);
-		log_write("Parking brake toe release requested; awaiting physical switch release (left %.3f, right %.3f)",
-			acData.left_brake, acData.right_brake);
+		log_write("Parking brake toe release requested; awaiting physical switch release (left %.3f, right %.3f)", acData.left_brake, acData.right_brake);
 		return;
 	}
 
-	if (g_parking_brake_set_awaiting_simulator) 
+	if (g_parking_brake_set_awaiting_simulator)
 	{
 		if (!input.engaged)
 		{
@@ -896,21 +980,17 @@ static void ProcessTqParkingBrake(void)
 			g_parking_brake_set_awaiting_simulator = 0;
 			g_parking_brake_set_started_at = 0.0f;
 			g_parking_brake_set_timeout_logged = 0;
-			first_run_component_complete(TQ_FIRST_RUN_PARKING_BRAKE,
-				"parking-brake switch, interlock and simulator indication");
+			first_run_component_complete(TQ_FIRST_RUN_PARKING_BRAKE, "parking-brake switch, interlock and simulator indication");
 			log_write("X-Plane confirmed parking brake set via simulator indicator");
 		}
-		else if (!g_parking_brake_set_timeout_logged &&
-			(now - g_parking_brake_set_started_at) >=
-			TQ_PARKING_BRAKE_CONFIRM_TIMEOUT_SECONDS)
+		else if (!g_parking_brake_set_timeout_logged && (now - g_parking_brake_set_started_at) >= TQ_PARKING_BRAKE_CONFIRM_TIMEOUT_SECONDS)
 		{
 			/*
 			 * Do not cancel SET on a timeout: the command must remain held until
 			 * the simulator lamp acknowledges it. Log once for diagnostics.
 			 */
 			g_parking_brake_set_timeout_logged = 1;
-			log_write("Parking-brake SET still awaiting simulator lamp after %.1f seconds; command remains held",
-				TQ_PARKING_BRAKE_CONFIRM_TIMEOUT_SECONDS);
+			log_write("Parking-brake SET still awaiting simulator lamp after %.1f seconds; command remains held", TQ_PARKING_BRAKE_CONFIRM_TIMEOUT_SECONDS);
 			return;
 		}
 		else
@@ -948,26 +1028,16 @@ static void ProcessTqFuelCutoffSwitches(void)
 	PokeysFuelCutoffInputs inputs;
 
 	pokeys_get_fuel_cutoff_inputs(&inputs);
-	if (!inputs.connected || !inputs.valid ||
-		inputs.sequence == g_last_fuel_cutoff_sequence)
+	if (!inputs.connected || !inputs.valid || inputs.sequence == g_last_fuel_cutoff_sequence)
 		return;
-	if (drefTable[DREF_FUEL_CUTOFF_LT].handle == NULL ||
-		drefTable[DREF_FUEL_CUTOFF_RT].handle == NULL ||
-		!drefTable[DREF_FUEL_CUTOFF_LT].isWriteable ||
-		!drefTable[DREF_FUEL_CUTOFF_RT].isWriteable)
+	if (drefTable[DREF_FUEL_CUTOFF_LT].handle == NULL || drefTable[DREF_FUEL_CUTOFF_RT].handle == NULL || !drefTable[DREF_FUEL_CUTOFF_LT].isWriteable || !drefTable[DREF_FUEL_CUTOFF_RT].isWriteable)
 		return;
 
-	if (!set_float_dataref(DREF_FUEL_CUTOFF_LT,
-		inputs.left_cutoff ? 0.0f : 1.0f) ||
-		!set_float_dataref(DREF_FUEL_CUTOFF_RT,
-			inputs.right_cutoff ? 0.0f : 1.0f))
+	if (!set_float_dataref(DREF_FUEL_CUTOFF_LT, inputs.left_cutoff ? 0.0f : 1.0f) || !set_float_dataref(DREF_FUEL_CUTOFF_RT, inputs.right_cutoff ? 0.0f : 1.0f))
 		return;
 	g_last_fuel_cutoff_sequence = inputs.sequence;
-	first_run_component_complete(TQ_FIRST_RUN_FUEL_CUTOFFS,
-		"left and right fuel-cutoff switches");
-	log_write("Fuel-cutoff switches applied: left=%s right=%s",
-		inputs.left_cutoff ? "CUTOFF" : "IDLE",
-		inputs.right_cutoff ? "CUTOFF" : "IDLE");
+	first_run_component_complete(TQ_FIRST_RUN_FUEL_CUTOFFS, "left and right fuel-cutoff switches");
+	log_write("Fuel-cutoff switches applied: left=%s right=%s", inputs.left_cutoff ? "CUTOFF" : "IDLE", inputs.right_cutoff ? "CUTOFF" : "IDLE");
 }
 
 /*
@@ -985,13 +1055,16 @@ static void ProcessTqTrimCutoutSwitches(void)
 	float now;
 	int electric_matches;
 	int autopilot_matches;
+	TRIM_TRACE("ENTER ProcessTqTrimCutoutSwitches last_sequence=%llu elec_commanded=%d ap_commanded=%d waiting_guards=%d sim_elec_guard=%.3f sim_ap_guard=%.3f sim_elec_switch=%.3f sim_ap_switch=%.3f", (unsigned long long)g_last_trim_cutout_sequence, g_trim_cutout_electric_commanded, g_trim_cutout_autopilot_commanded, g_trim_cutout_waiting_for_guards, acData.el_trimlock_pos, acData.ap_trimlock_pos, acData.el_trim_pos, acData.ap_trim_pos);
 
 	pokeys_get_trim_cutout_inputs(&inputs);
+	TRIM_TRACE("trim cutout snapshot connected=%d valid=%d sequence=%llu pin7_electric_normal=%d pin9_autopilot_normal=%d", inputs.connected, inputs.valid, (unsigned long long)inputs.sequence, inputs.electric_normal, inputs.autopilot_normal);
 	if (!inputs.connected || !inputs.valid)
 	{
 		g_last_trim_cutout_sequence = 0;
 		g_trim_cutout_electric_commanded = 0;
 		g_trim_cutout_autopilot_commanded = 0;
+		TRIM_TRACE("EXIT ProcessTqTrimCutoutSwitches reason=inputs_unavailable");
 		return;
 	}
 
@@ -1000,33 +1073,30 @@ static void ProcessTqTrimCutoutSwitches(void)
 		g_last_trim_cutout_sequence = inputs.sequence;
 		g_trim_cutout_electric_commanded = 0;
 		g_trim_cutout_autopilot_commanded = 0;
+		TRIM_TRACE("trim cutout input sequence changed new_sequence=%llu", (unsigned long long)inputs.sequence);
 	}
 	now = XPLMGetElapsedTime();
 
 	/* Both guards must be open before their maintained switches can move. */
 	if (acData.el_trimlock_pos < 0.5f || acData.ap_trimlock_pos < 0.5f)
 	{
-		if (acData.el_trimlock_pos < 0.5f &&
-			cmdTable[CMD_EL_TRIMLOCK].handle != NULL &&
-			(!g_trim_cutout_electric_commanded ||
-			 now - g_trim_cutout_electric_command_time >=
-				TQ_SWITCH_COMMAND_RETRY_SECONDS))
+		TRIM_TRACE("trim cutout guards require opening");
+		if (acData.el_trimlock_pos < 0.5f && cmdTable[CMD_EL_TRIMLOCK].handle != NULL && (!g_trim_cutout_electric_commanded || now - g_trim_cutout_electric_command_time >= TQ_SWITCH_COMMAND_RETRY_SECONDS))
 		{
 			XPLMCommandOnce(cmdTable[CMD_EL_TRIMLOCK].handle);
 			g_trim_cutout_electric_commanded = 1;
 			g_trim_cutout_electric_command_time = now;
+			TRIM_TRACE("electric trim guard command issued handle=%p time=%.3f", (void*)cmdTable[CMD_EL_TRIMLOCK].handle, now);
 		}
-		if (acData.ap_trimlock_pos < 0.5f &&
-			cmdTable[CMD_AP_TRIMLOCK].handle != NULL &&
-			(!g_trim_cutout_autopilot_commanded ||
-			 now - g_trim_cutout_autopilot_command_time >=
-				TQ_SWITCH_COMMAND_RETRY_SECONDS))
+		if (acData.ap_trimlock_pos < 0.5f && cmdTable[CMD_AP_TRIMLOCK].handle != NULL && (!g_trim_cutout_autopilot_commanded || now - g_trim_cutout_autopilot_command_time >= TQ_SWITCH_COMMAND_RETRY_SECONDS))
 		{
 			XPLMCommandOnce(cmdTable[CMD_AP_TRIMLOCK].handle);
 			g_trim_cutout_autopilot_commanded = 1;
 			g_trim_cutout_autopilot_command_time = now;
+			TRIM_TRACE("autopilot trim guard command issued handle=%p time=%.3f", (void*)cmdTable[CMD_AP_TRIMLOCK].handle, now);
 		}
 		g_trim_cutout_waiting_for_guards = 1;
+		TRIM_TRACE("EXIT ProcessTqTrimCutoutSwitches reason=waiting_for_guards");
 		return;
 	}
 	if (g_trim_cutout_waiting_for_guards)
@@ -1038,32 +1108,27 @@ static void ProcessTqTrimCutoutSwitches(void)
 
 	electric_target = inputs.electric_normal ? 0.0f : 1.0f;
 	autopilot_target = inputs.autopilot_normal ? 0.0f : 1.0f;
-	electric_matches = (acData.el_trim_pos >= 0.5f) ==
-		(electric_target >= 0.5f);
-	autopilot_matches = (acData.ap_trim_pos >= 0.5f) ==
-		(autopilot_target >= 0.5f);
-	if (!electric_matches && cmdTable[CMD_EL_TRIM].handle != NULL &&
-		(!g_trim_cutout_electric_commanded ||
-		 now - g_trim_cutout_electric_command_time >=
-			TQ_SWITCH_COMMAND_RETRY_SECONDS))
+	electric_matches = (acData.el_trim_pos >= 0.5f) == (electric_target >= 0.5f);
+	autopilot_matches = (acData.ap_trim_pos >= 0.5f) == (autopilot_target >= 0.5f);
+	TRIM_TRACE("trim cutout comparison electric_target=%.3f autopilot_target=%.3f electric_matches=%d autopilot_matches=%d", electric_target, autopilot_target, electric_matches, autopilot_matches);
+	if (!electric_matches && cmdTable[CMD_EL_TRIM].handle != NULL && (!g_trim_cutout_electric_commanded || now - g_trim_cutout_electric_command_time >= TQ_SWITCH_COMMAND_RETRY_SECONDS))
 	{
 		XPLMCommandOnce(cmdTable[CMD_EL_TRIM].handle);
 		g_trim_cutout_electric_commanded = 1;
 		g_trim_cutout_electric_command_time = now;
+		TRIM_TRACE("electric trim switch command issued handle=%p time=%.3f", (void*)cmdTable[CMD_EL_TRIM].handle, now);
 	}
 	else if (electric_matches)
 	{
 		g_trim_cutout_electric_commanded = 0;
 	}
 
-	if (!autopilot_matches && cmdTable[CMD_AP_TRIM].handle != NULL &&
-		(!g_trim_cutout_autopilot_commanded ||
-		 now - g_trim_cutout_autopilot_command_time >=
-			TQ_SWITCH_COMMAND_RETRY_SECONDS))
+	if (!autopilot_matches && cmdTable[CMD_AP_TRIM].handle != NULL && (!g_trim_cutout_autopilot_commanded || now - g_trim_cutout_autopilot_command_time >= TQ_SWITCH_COMMAND_RETRY_SECONDS))
 	{
 		XPLMCommandOnce(cmdTable[CMD_AP_TRIM].handle);
 		g_trim_cutout_autopilot_commanded = 1;
 		g_trim_cutout_autopilot_command_time = now;
+		TRIM_TRACE("autopilot trim switch command issued handle=%p time=%.3f", (void*)cmdTable[CMD_AP_TRIM].handle, now);
 	}
 	else if (autopilot_matches)
 	{
@@ -1071,32 +1136,42 @@ static void ProcessTqTrimCutoutSwitches(void)
 	}
 
 	if (electric_matches && autopilot_matches)
-		first_run_component_complete(TQ_FIRST_RUN_TRIM_CUTOUTS,
-			"electric and autopilot trim cutout switches");
+		first_run_component_complete(TQ_FIRST_RUN_TRIM_CUTOUTS, "electric and autopilot trim cutout switches");
+	TRIM_TRACE("EXIT ProcessTqTrimCutoutSwitches electric_matches=%d autopilot_matches=%d elec_commanded=%d ap_commanded=%d", electric_matches, autopilot_matches, g_trim_cutout_electric_commanded, g_trim_cutout_autopilot_commanded);
 }
 
 /* Convert the fixed 400..3695 trim potentiometer travel to X-Plane trim. */
 static float trim_position_to_simulator(float position)
 {
 	float normalised;
-	if (position < TQ_TRIM_POSITION_MIN) position = TQ_TRIM_POSITION_MIN;
-	if (position > TQ_TRIM_POSITION_MAX) position = TQ_TRIM_POSITION_MAX;
-	normalised = (position - TQ_TRIM_POSITION_MIN) /
-		(TQ_TRIM_POSITION_MAX - TQ_TRIM_POSITION_MIN);
-	return TQ_TRIM_SIM_MIN + normalised *
-		(TQ_TRIM_SIM_MAX - TQ_TRIM_SIM_MIN);
+	float original_position = position;
+	float result;
+	TRIM_TRACE("ENTER trim_position_to_simulator position_bucket=%d", ((int)position + 5) / 10 * 10);
+	if (position < TQ_TRIM_POSITION_MIN)
+		position = TQ_TRIM_POSITION_MIN;
+	if (position > TQ_TRIM_POSITION_MAX)
+		position = TQ_TRIM_POSITION_MAX;
+	normalised = (position - TQ_TRIM_POSITION_MIN) / (TQ_TRIM_POSITION_MAX - TQ_TRIM_POSITION_MIN);
+	result = TQ_TRIM_SIM_MIN + normalised * (TQ_TRIM_SIM_MAX - TQ_TRIM_SIM_MIN);
+	TRIM_TRACE("EXIT trim_position_to_simulator original_bucket=%d clamped_bucket=%d normalised=%.3f result=%.3f", ((int)original_position + 5) / 10 * 10, ((int)position + 5) / 10 * 10, normalised, result);
+	return (result);
 }
 
 /* Inverse of the original XPUIPC -16383..12312 to 0..4095 mapping. */
 static uint32_t simulator_trim_to_position(float trim)
 {
 	float normalised;
-	if (trim < TQ_TRIM_SIM_MIN) trim = TQ_TRIM_SIM_MIN;
-	if (trim > TQ_TRIM_SIM_MAX) trim = TQ_TRIM_SIM_MAX;
-	normalised = (trim - TQ_TRIM_SIM_MIN) /
-		(TQ_TRIM_SIM_MAX - TQ_TRIM_SIM_MIN);
-	return (uint32_t)(TQ_TRIM_POSITION_MIN + normalised *
-		(TQ_TRIM_POSITION_MAX - TQ_TRIM_POSITION_MIN) + 0.5f);
+	float original_trim = trim;
+	uint32_t result;
+	TRIM_TRACE("ENTER simulator_trim_to_position trim=%.6f", trim);
+	if (trim < TQ_TRIM_SIM_MIN)
+		trim = TQ_TRIM_SIM_MIN;
+	if (trim > TQ_TRIM_SIM_MAX)
+		trim = TQ_TRIM_SIM_MAX;
+	normalised = (trim - TQ_TRIM_SIM_MIN) / (TQ_TRIM_SIM_MAX - TQ_TRIM_SIM_MIN);
+	result = (uint32_t)(TQ_TRIM_POSITION_MIN + normalised * (TQ_TRIM_POSITION_MAX - TQ_TRIM_POSITION_MIN) + 0.5f);
+	TRIM_TRACE("EXIT simulator_trim_to_position original=%.6f clamped=%.6f normalised=%.6f result=%u", original_trim, trim, normalised, result);
+	return (result);
 }
 
 /*
@@ -1109,30 +1184,33 @@ static uint32_t simulator_trim_to_position(float trim)
  * deadband unconditionally cancel the manual motor command, preventing normal
  * simulator trim drift from being mistaken for a held yoke switch.
  */
-static int manual_trim_direction_from_datarefs(float simulator_delta,
-	int* datarefs_available)
+static int manual_trim_direction_from_datarefs(float simulator_delta, int* datarefs_available)
 {
 	int captain_available = drefTable[DREF_TRIM_POS_CA].handle != NULL;
 	int first_officer_available = drefTable[DREF_TRIM_POS_FO].handle != NULL;
 	int captain_active;
 	int first_officer_active;
 	int switch_active;
+	int result;
+	TRIM_TRACE("ENTER manual_trim_direction_from_datarefs simulator_delta=%.6f command_direction=%d last_dataref_direction=%d ca_value=%.3f fo_value=%.3f", simulator_delta, g_manual_trim_command_direction, g_last_trim_dataref_direction, acData.trim_pos_ca, acData.trim_pos_fo);
 
 	if (datarefs_available != NULL)
 		*datarefs_available = captain_available || first_officer_available;
-	captain_active = captain_available &&
-		(acData.trim_pos_ca < TQ_ZIBO_TRIM_SWITCH_LOW_MAX ||
-			acData.trim_pos_ca > TQ_ZIBO_TRIM_SWITCH_HIGH_MIN);
-	first_officer_active = first_officer_available &&
-		(acData.trim_pos_fo < TQ_ZIBO_TRIM_SWITCH_LOW_MAX ||
-			acData.trim_pos_fo > TQ_ZIBO_TRIM_SWITCH_HIGH_MIN);
+	captain_active = captain_available && (acData.trim_pos_ca < TQ_ZIBO_TRIM_SWITCH_LOW_MAX || acData.trim_pos_ca > TQ_ZIBO_TRIM_SWITCH_HIGH_MIN);
+	first_officer_active = first_officer_available && (acData.trim_pos_fo < TQ_ZIBO_TRIM_SWITCH_LOW_MAX || acData.trim_pos_fo > TQ_ZIBO_TRIM_SWITCH_HIGH_MIN);
 	switch_active = captain_active || first_officer_active;
-	if (!switch_active) return(0);
-	if (g_manual_trim_command_direction != 0)
-		return g_manual_trim_command_direction;
-	if (simulator_delta > TQ_TRIM_SIM_CHANGE_EPSILON) return(1);
-	if (simulator_delta < -TQ_TRIM_SIM_CHANGE_EPSILON) return -1;
-	return g_last_trim_dataref_direction;
+	if (!switch_active)
+		result = 0;
+	else if (g_manual_trim_command_direction != 0)
+		result = g_manual_trim_command_direction;
+	else if (simulator_delta > TQ_TRIM_SIM_CHANGE_EPSILON)
+		result = 1;
+	else if (simulator_delta < -TQ_TRIM_SIM_CHANGE_EPSILON)
+		result = -1;
+	else
+		result = g_last_trim_dataref_direction;
+	TRIM_TRACE("EXIT manual_trim_direction_from_datarefs ca_available=%d fo_available=%d ca_active=%d fo_active=%d switch_active=%d result=%d", captain_available, first_officer_available, captain_active, first_officer_active, switch_active, result);
+	return (result);
 }
 
 /*
@@ -1157,6 +1235,7 @@ static void ProcessTqTrim(void)
 	int motor_allowed;
 	int motor_running;
 	int manual_direction;
+	TRIM_TRACE("ENTER ProcessTqTrim calibration_valid=%d input_initialised=%d first_run=%d last_position_bucket=%d last_sim_trim=%.6f command_direction=%d dataref_direction=%d battery=%.3f paused=%d ap=%.3f elec_cutout=%.3f ap_cutout=%.3f elec_guard=%.3f ap_guard=%.3f elevator_trim=%.6f ca_switch=%.3f fo_switch=%.3f", g_control_calibration_valid, g_trim_input_initialised, g_trim_first_run_active, ((int)g_last_trim_position + 5) / 10 * 10, g_last_simulator_trim, g_manual_trim_command_direction, g_last_trim_dataref_direction, acData.battery_on, acData.paused, acData.ap_engaged, acData.el_trim_pos, acData.ap_trim_pos, acData.el_trimlock_pos, acData.ap_trimlock_pos, acData.elevator_trim, acData.trim_pos_ca, acData.trim_pos_fo);
 
 	if (!g_control_calibration_valid)
 	{
@@ -1165,10 +1244,12 @@ static void ProcessTqTrim(void)
 		pokeys_set_trim_indicator_target(0U, 0);
 		g_trim_input_initialised = 0;
 		g_trim_first_run_active = 1;
+		TRIM_TRACE("EXIT ProcessTqTrim reason=calibration_invalid");
 		return;
 	}
 
 	pokeys_get_lever_positions(&positions);
+	TRIM_TRACE("trim lever snapshot connected=%d valid=%d adc_bucket=%u", positions.connected, positions.valid, (positions.value[POKEYS_LEVER_TRIM] + 5U) / 10U * 10U);
 	if (!positions.connected || !positions.valid)
 	{
 		pokeys_set_trim_target(0U, 0);
@@ -1176,6 +1257,7 @@ static void ProcessTqTrim(void)
 		pokeys_set_trim_indicator_target(0U, 0);
 		g_trim_input_initialised = 0;
 		g_trim_first_run_active = 1;
+		TRIM_TRACE("EXIT ProcessTqTrim reason=lever_input_unavailable");
 		return;
 	}
 
@@ -1186,10 +1268,10 @@ static void ProcessTqTrim(void)
 	motor_running = pokeys_trim_motor_is_running();
 	manual_direction = g_manual_trim_command_direction;
 	if (manual_direction == 0)
-		manual_direction = manual_trim_direction_from_datarefs(
-			simulator_before - g_last_simulator_trim, NULL);
+		manual_direction = manual_trim_direction_from_datarefs(simulator_before - g_last_simulator_trim, NULL);
 	g_last_trim_dataref_direction = manual_direction;
 	physical_trim = trim_position_to_simulator(physical_position);
+	TRIM_TRACE("trim derived physical_position_bucket=%d physical_trim=%.3f simulator_before=%.4f simulator_delta=%.4f autopilot_engaged=%d motor_running=%d manual_direction=%d filter_average_bucket=%d filter_initialised=%d", ((int)physical_position + 5) / 10 * 10, physical_trim, simulator_before, simulator_before - g_last_simulator_trim, autopilot_engaged, motor_running, manual_direction, ((int)(g_trim_filter.total / (float)TQ_MOVING_AVERAGE_SAMPLES) + 5) / 10 * 10, g_trim_filter.initialised);
 
 	if (!g_trim_input_initialised)
 	{
@@ -1198,6 +1280,7 @@ static void ProcessTqTrim(void)
 		g_last_trim_position = physical_position;
 		g_last_simulator_trim = simulator_before;
 		g_trim_first_run_active = 1;
+		TRIM_TRACE("trim input initialised sequence=%llu position=%.3f simulator=%.6f", (unsigned long long)g_last_trim_sequence, g_last_trim_position, g_last_simulator_trim);
 	}
 
 	/*
@@ -1210,10 +1293,42 @@ static void ProcessTqTrim(void)
 	{
 		uint32_t target_position = simulator_trim_to_position(simulator_before);
 		float distance = physical_position - (float)target_position;
-		if (distance < 0.0f) distance = -distance;
+		char trim_position_message[768];
+		const char* manual_direction;
+		int v3_trim_position_valid = physical_position >= TQ_V3_TRIM_STARTUP_MIN && physical_position <= TQ_V3_TRIM_STARTUP_MAX;
+		if (distance < 0.0f)
+			distance = -distance;
 		motor_allowed = acData.paused == 0 && acData.battery_on != 0.0 && acData.ap_trim_pos < 0.5f && acData.el_trim_pos < 0.5f;
+		TRIM_TRACE("trim first-run target=%u physical_bucket=%d distance_bucket=%d tolerance=%.3f motor_allowed=%d gates paused=%d battery=%.3f ap_cutout=%.3f elec_cutout=%.3f", target_position, ((int)physical_position + 5) / 10 * 10, ((int)distance + 5) / 10 * 10, TQ_TRIM_SYNC_TOLERANCE_COUNTS, motor_allowed, acData.paused, acData.battery_on, acData.ap_trim_pos, acData.el_trim_pos);
 		pokeys_set_trim_manual_command(0, 0);
 		pokeys_set_trim_indicator_target(target_position, 1);
+		if (g_trim_motor_variant == 3U && !g_v3_trim_startup_position_accepted && !v3_trim_position_valid)
+		{
+			manual_direction = physical_position > TQ_V3_TRIM_STARTUP_MAX ? "NOSE DOWN" : "NOSE UP";
+			pokeys_set_trim_target(target_position, 0);
+			g_last_trim_sequence = positions.sequence;
+			g_last_trim_position = physical_position;
+			g_last_simulator_trim = simulator_before;
+			if (!g_v3_trim_position_warning_shown)
+			{
+				snprintf(trim_position_message, sizeof(trim_position_message), "The trim wheel is outside the safe startup position range.\n\nSwitch off the trim motor using the MAIN ELEC cutout switch. Manually rotate the trim wheel in the %s direction until it is within the valid range.\n\nCurrent position: %u\nValid startup range: %u to %u\n\nSelect OK after repositioning the trim wheel.", manual_direction, (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX);
+				g_v3_trim_position_warning_shown = 1;
+				log_write("V3 trim-wheel startup position %u is outside %u..%u; manual movement required in the %s direction", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX, manual_direction);
+				MessageBoxA(NULL, trim_position_message, "xpCFY_TQ - Reposition V3 Trim Wheel", MB_OK | MB_ICONWARNING | MB_TASKMODAL | MB_SETFOREGROUND);
+			}
+			return;
+		}
+		if (g_trim_motor_variant == 3U && !g_v3_trim_startup_position_accepted)
+		{
+			g_v3_trim_startup_position_accepted = 1;
+			if (g_v3_trim_position_warning_shown && !g_v3_trim_position_valid_shown)
+			{
+				snprintf(trim_position_message, sizeof(trim_position_message), "The trim wheel is now within the safe startup position range.\n\nCurrent position: %u\nValid startup range: %u to %u\n\nTrim-wheel synchronisation can now continue.", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX);
+				g_v3_trim_position_valid_shown = 1;
+				log_write("V3 trim-wheel startup position %u is now within %u..%u; synchronisation continuing", (unsigned int)(physical_position + 0.5f), (unsigned int)TQ_V3_TRIM_STARTUP_MIN, (unsigned int)TQ_V3_TRIM_STARTUP_MAX);
+				MessageBoxA(NULL, trim_position_message, "xpCFY_TQ - V3 Trim Wheel Position Valid", MB_OK | MB_ICONINFORMATION | MB_TASKMODAL | MB_SETFOREGROUND);
+			}
+		}
 		pokeys_set_trim_target(target_position, motor_allowed);
 		g_last_trim_sequence = positions.sequence;
 		g_last_trim_position = physical_position;
@@ -1223,12 +1338,15 @@ static void ProcessTqTrim(void)
 			g_trim_first_run_active = 0;
 			pokeys_set_trim_indicator_target(target_position, 0);
 			first_run_component_complete(TQ_FIRST_RUN_TRIM_POSITION, "trim wheel and trim indicator from simulator position");
+			TRIM_TRACE("trim first-run position synchronised target=%u physical=%.3f", target_position, physical_position);
 		}
+		TRIM_TRACE("EXIT ProcessTqTrim mode=first_run first_run=%d motor_allowed=%d target=%u distance_bucket=%d", g_trim_first_run_active, motor_allowed, target_position, ((int)distance + 5) / 10 * 10);
 		return;
 	}
 
 	physical_delta = physical_position - g_last_trim_position;
-	if (physical_delta < 0.0f) physical_delta = -physical_delta;
+	if (physical_delta < 0.0f)
+		physical_delta = -physical_delta;
 
 	/*
 	 * The original gives the A/P closed-loop path ownership whenever the
@@ -1241,11 +1359,13 @@ static void ProcessTqTrim(void)
 		uint32_t target_position = simulator_trim_to_position(simulator_before);
 		/* A/P trim cutout alone inhibits the original automatic trim path. */
 		motor_allowed = acData.paused == 0 && acData.ap_trim_pos < 0.5f;
+		TRIM_TRACE("trim autopilot-follow target=%u physical=%.3f motor_allowed=%d paused=%d ap_cutout=%.3f", target_position, physical_position, motor_allowed, acData.paused, acData.ap_trim_pos);
 		pokeys_set_trim_manual_command(0, 0);
 		pokeys_set_trim_target(target_position, motor_allowed);
 		g_last_trim_sequence = positions.sequence;
 		g_last_trim_position = physical_position;
 		g_last_simulator_trim = simulator_before;
+		TRIM_TRACE("EXIT ProcessTqTrim mode=autopilot target=%u motor_allowed=%d", target_position, motor_allowed);
 		return;
 	}
 
@@ -1257,16 +1377,19 @@ static void ProcessTqTrim(void)
 	if (manual_direction != 0)
 	{
 		motor_allowed = acData.paused == 0 && acData.battery_on != 0.0 && acData.el_trim_pos < 0.5f;
+		TRIM_TRACE("trim manual-command direction=%d motor_allowed=%d paused=%d battery=%.3f elec_cutout=%.3f", manual_direction, motor_allowed, acData.paused, acData.battery_on, acData.el_trim_pos);
 		pokeys_set_trim_target(0U, 0);
 		pokeys_set_trim_manual_command(manual_direction, motor_allowed);
 		g_last_trim_sequence = positions.sequence;
 		g_last_trim_position = physical_position;
 		g_last_simulator_trim = simulator_before;
+		TRIM_TRACE("EXIT ProcessTqTrim mode=manual_command direction=%d motor_allowed=%d", manual_direction, motor_allowed);
 		return;
 	}
 
 	/* Idle manual mode brakes the motor, matching the original switch branch. */
 	motor_allowed = acData.paused == 0 && acData.battery_on != 0.0 && acData.el_trim_pos < 0.5f;
+	TRIM_TRACE("trim manual-idle motor_allowed=%d motor_running=%d physical_delta_bucket=%d threshold=%.3f", motor_allowed, motor_running, ((int)physical_delta + 2) / 5 * 5, TQ_TRIM_PHYSICAL_CHANGE_COUNTS);
 	pokeys_set_trim_target(0U, 0);
 	pokeys_set_trim_manual_command(0, motor_allowed);
 
@@ -1274,13 +1397,17 @@ static void ProcessTqTrim(void)
 	if (!motor_running && physical_delta >= TQ_TRIM_PHYSICAL_CHANGE_COUNTS)
 	{
 		if (physical_trim != simulator_before)
+		{
+			TRIM_TRACE("trim physical movement writing simulator from=%.6f to=%.6f", simulator_before, physical_trim);
 			set_float_dataref(DREF_ELEVATOR_TRIM, physical_trim);
+		}
 		simulator_before = physical_trim;
 	}
 
 	g_last_trim_sequence = positions.sequence;
 	g_last_trim_position = physical_position;
 	g_last_simulator_trim = simulator_before;
+	TRIM_TRACE("EXIT ProcessTqTrim mode=manual_idle last_position_bucket=%d last_simulator_trim=%.6f", ((int)g_last_trim_position + 5) / 10 * 10, g_last_simulator_trim);
 }
 
 /* Compare a float-array FMA value with one of Zibo's integer mode codes. */
@@ -1292,7 +1419,7 @@ static int TqPfdSpeedModeEquals(float value, int mode)
 /* Return non-zero when either FMC announces Zibo mode 5: approach GA. */
 static int TqGaModeActive(void)
 {
-	return TqPfdSpeedModeEquals(acData.pfd_speed_mode_ca, 5) ||	TqPfdSpeedModeEquals(acData.pfd_speed_mode_fo, 5);
+	return TqPfdSpeedModeEquals(acData.pfd_speed_mode_ca, 5) || TqPfdSpeedModeEquals(acData.pfd_speed_mode_fo, 5);
 }
 
 /*
@@ -1301,11 +1428,11 @@ static int TqGaModeActive(void)
  */
 static int TqPfdSpeedModeDrivesThrottle(float mode)
 {
-	return TqPfdSpeedModeEquals(mode, 2) ||  /* N1 */
-		TqPfdSpeedModeEquals(mode, 3) ||      /* MCP SPD */
-		TqPfdSpeedModeEquals(mode, 4) ||      /* FMC SPD */
-		TqPfdSpeedModeEquals(mode, 5) ||      /* GA */
-		TqPfdSpeedModeEquals(mode, 7);        /* RETARD */
+	return TqPfdSpeedModeEquals(mode, 2) || /* N1 */
+		   TqPfdSpeedModeEquals(mode, 3) || /* MCP SPD */
+		   TqPfdSpeedModeEquals(mode, 4) || /* FMC SPD */
+		   TqPfdSpeedModeEquals(mode, 5) || /* GA */
+		   TqPfdSpeedModeEquals(mode, 7);	/* RETARD */
 }
 
 static int TqAutothrottleMotorModeActive(void)
@@ -1339,9 +1466,7 @@ static void UpdateTqAutothrottleSession(void)
  */
 static int TqManualThrottleDisconnectRequired(void)
 {
-	return acData.at_arm > 0.0f && TqAutothrottleMotorModeActive() &&
-		(g_toga_selected_since_at_arm || acData.on_ground == 0) &&
-		!g_manual_throttle_disconnect_pending;
+	return acData.at_arm > 0.0f && TqAutothrottleMotorModeActive() && (g_toga_selected_since_at_arm || acData.on_ground == 0) && !g_manual_throttle_disconnect_pending;
 }
 
 /*
@@ -1354,9 +1479,9 @@ static int TqManualThrottleDisconnectRequired(void)
 static int TqAutothrottleOwnsLevers(void)
 {
 	if (g_manual_throttle_disconnect_pending || acData.at_arm <= 0.0f)
-		return(0);
+		return (0);
 	if (acData.on_ground != 0 && !g_toga_selected_since_at_arm)
-		return(0);
+		return (0);
 	return TqAutothrottleMotorModeActive();
 }
 
@@ -1369,7 +1494,8 @@ static void RequestTqManualThrottleDisconnect(int lever_mask)
 {
 	int command_index;
 
-	if (lever_mask == 0 || !TqManualThrottleDisconnectRequired()) return;
+	if (lever_mask == 0 || !TqManualThrottleDisconnectRequired())
+		return;
 	command_index = (lever_mask & 1) ? CMD_LT_AT_DISCO : CMD_RT_AT_DISCO;
 	if (cmdTable[command_index].handle == NULL)
 	{
@@ -1381,9 +1507,7 @@ static void RequestTqManualThrottleDisconnect(int lever_mask)
 	g_unowned_throttle_tracking = 0;
 	pokeys_set_throttle_follow_targets(0U, 0U, 0U, 0U, 0);
 	XPLMCommandOnce(cmdTable[command_index].handle);
-	log_write("Manual %s throttle movement detected after %s; A/T disconnect command issued",
-		lever_mask == 3 ? "left/right" : (lever_mask & 1 ? "left" : "right"),
-		acData.on_ground == 0 ? "lift-off" : "TO/GA selection");
+	log_write("Manual %s throttle movement detected after %s; A/T disconnect command issued", lever_mask == 3 ? "left/right" : (lever_mask & 1 ? "left" : "right"), acData.on_ground == 0 ? "lift-off" : "TO/GA selection");
 }
 
 /*
@@ -1395,13 +1519,8 @@ static void RequestTqManualThrottleDisconnect(int lever_mask)
  */
 static void ProcessTqLeverWrites(void)
 {
-	static const float flaps_value[9] = {
-		0.000f, 0.125f, 0.250f, 0.375f, 0.500f,
-		0.625f, 0.750f, 0.875f, 1.000f
-	};
-	static const char* flaps_name[9] = {
-		"UP", "1", "2", "5", "10", "15", "25", "30", "40"
-	};
+	static const float flaps_value[9] = {0.000f, 0.125f, 0.250f, 0.375f, 0.500f, 0.625f, 0.750f, 0.875f, 1.000f};
+	static const char* flaps_name[9] = {"UP", "1", "2", "5", "10", "15", "25", "30", "40"};
 	PokeysLeverPositions positions;
 	float throttle_left;
 	float throttle_right;
@@ -1418,17 +1537,18 @@ static void ProcessTqLeverWrites(void)
 	int speedbrake_state;
 	int manual_override_mask;
 
-	if (!g_control_calibration_valid) return;
+	if (!g_control_calibration_valid)
+		return;
 
 	pokeys_get_lever_positions(&positions);
-	
-	if (!positions.connected || !positions.valid ||	positions.sequence == g_last_lever_sequence)
+
+	if (!positions.connected || !positions.valid || positions.sequence == g_last_lever_sequence)
 		return;
 	g_last_lever_sequence = positions.sequence;
 
 	throttle_left = map_calibrated_axis(moving_average_add(&g_throttle_left_filter, (float)positions.value[POKEYS_LEVER_THROTTLE_1]), g_control_calibration.lever1_min_position, g_control_calibration.lever1_max_position);
 
-	throttle_right = map_calibrated_axis(moving_average_add(&g_throttle_right_filter, (float)positions.value[POKEYS_LEVER_THROTTLE_2]),	g_control_calibration.lever2_min_position, g_control_calibration.lever2_max_position);
+	throttle_right = map_calibrated_axis(moving_average_add(&g_throttle_right_filter, (float)positions.value[POKEYS_LEVER_THROTTLE_2]), g_control_calibration.lever2_min_position, g_control_calibration.lever2_max_position);
 	g_physical_throttle_left = throttle_left;
 	g_physical_throttle_right = throttle_right;
 	g_physical_throttle_positions_valid = 1;
@@ -1452,13 +1572,9 @@ static void ProcessTqLeverWrites(void)
 		else
 		{
 			manual_override_mask = 0;
-			if (absolute_difference(throttle_left,
-				g_unowned_throttle_left_reference) >=
-				TQ_THROTTLE_MANUAL_MOVEMENT_THRESHOLD)
+			if (absolute_difference(throttle_left, g_unowned_throttle_left_reference) >= TQ_THROTTLE_MANUAL_MOVEMENT_THRESHOLD)
 				manual_override_mask |= 1;
-			if (absolute_difference(throttle_right,
-				g_unowned_throttle_right_reference) >=
-				TQ_THROTTLE_MANUAL_MOVEMENT_THRESHOLD)
+			if (absolute_difference(throttle_right, g_unowned_throttle_right_reference) >= TQ_THROTTLE_MANUAL_MOVEMENT_THRESHOLD)
 				manual_override_mask |= 2;
 			RequestTqManualThrottleDisconnect(manual_override_mask);
 		}
@@ -1467,7 +1583,7 @@ static void ProcessTqLeverWrites(void)
 	{
 		g_unowned_throttle_tracking = 0;
 	}
-	
+
 	speedbrake = map_calibrated_axis(moving_average_add(&g_speedbrake_filter, (float)positions.value[POKEYS_LEVER_SPEED_BRAKE]), g_control_calibration.spoiler_min_position, g_control_calibration.spoiler_max_position);
 	speedbrake_corrected = (uint32_t)(speedbrake * 4095.0f + 0.5f);
 	if (speedbrake_corrected <= TQ_SPEEDBRAKE_DOWN_MAX_COUNTS)
@@ -1482,33 +1598,19 @@ static void ProcessTqLeverWrites(void)
 	}
 	else if (speedbrake_corrected < TQ_SPEEDBRAKE_UP_MIN_COUNTS)
 	{
-		float travel = (float)(speedbrake_corrected -
-			TQ_SPEEDBRAKE_ARM_MAX_COUNTS) /
-			(float)(TQ_SPEEDBRAKE_UP_MIN_COUNTS -
-				TQ_SPEEDBRAKE_ARM_MAX_COUNTS);
+		float travel = (float)(speedbrake_corrected - TQ_SPEEDBRAKE_ARM_MAX_COUNTS) / (float)(TQ_SPEEDBRAKE_UP_MIN_COUNTS - TQ_SPEEDBRAKE_ARM_MAX_COUNTS);
 		speedbrake_state = TQ_SPEEDBRAKE_FLIGHT;
-		speedbrake_output = TQ_SPEEDBRAKE_ARM_VALUE + travel *
-			(TQ_SPEEDBRAKE_FLIGHT_VALUE - TQ_SPEEDBRAKE_ARM_VALUE);
+		speedbrake_output = TQ_SPEEDBRAKE_ARM_VALUE + travel * (TQ_SPEEDBRAKE_FLIGHT_VALUE - TQ_SPEEDBRAKE_ARM_VALUE);
 	}
 	else
 	{
-		float travel = (float)(speedbrake_corrected -
-			TQ_SPEEDBRAKE_UP_MIN_COUNTS) /
-			(float)(4095U - TQ_SPEEDBRAKE_UP_MIN_COUNTS);
+		float travel = (float)(speedbrake_corrected - TQ_SPEEDBRAKE_UP_MIN_COUNTS) / (float)(4095U - TQ_SPEEDBRAKE_UP_MIN_COUNTS);
 		speedbrake_state = TQ_SPEEDBRAKE_UP;
-		speedbrake_output = TQ_SPEEDBRAKE_FLIGHT_VALUE + travel *
-			(1.0f - TQ_SPEEDBRAKE_FLIGHT_VALUE);
+		speedbrake_output = TQ_SPEEDBRAKE_FLIGHT_VALUE + travel * (1.0f - TQ_SPEEDBRAKE_FLIGHT_VALUE);
 	}
-	reverser_left = map_calibrated_axis(moving_average_add(&g_reverser_left_filter,
-		(float)positions.value[POKEYS_LEVER_REVERSER_1]),
-		g_control_calibration.reverser1_min_position,
-		g_control_calibration.reverser1_max_position);
-	reverser_right = map_calibrated_axis(moving_average_add(&g_reverser_right_filter,
-		(float)positions.value[POKEYS_LEVER_REVERSER_2]),
-		g_control_calibration.reverser2_min_position,
-		g_control_calibration.reverser2_max_position);
-	flaps_position = flaps_filter_add(&g_flaps_filter,
-		(float)positions.value[POKEYS_LEVER_FLAPS]);
+	reverser_left = map_calibrated_axis(moving_average_add(&g_reverser_left_filter, (float)positions.value[POKEYS_LEVER_REVERSER_1]), g_control_calibration.reverser1_min_position, g_control_calibration.reverser1_max_position);
+	reverser_right = map_calibrated_axis(moving_average_add(&g_reverser_right_filter, (float)positions.value[POKEYS_LEVER_REVERSER_2]), g_control_calibration.reverser2_min_position, g_control_calibration.reverser2_max_position);
+	flaps_position = flaps_filter_add(&g_flaps_filter, (float)positions.value[POKEYS_LEVER_FLAPS]);
 	flaps_corrected = flaps_corrected_position(flaps_position);
 	flaps_detent = flaps_position_to_detent(flaps_corrected);
 
@@ -1518,24 +1620,18 @@ static void ProcessTqLeverWrites(void)
 	 * the stowed position. The combined per-engine throttle/reverser datarefs
 	 * use 0..1 for forward thrust and 0..-2 for reverse thrust.
 	 */
-	if (!g_reverser_left_active && acData.on_ground != 0 &&
-		throttle_left <= TQ_THROTTLE_IDLE_THRESHOLD &&
-		reverser_left > TQ_REVERSER_ACTIVATE_THRESHOLD)
+	if (!g_reverser_left_active && acData.on_ground != 0 && throttle_left <= TQ_THROTTLE_IDLE_THRESHOLD && reverser_left > TQ_REVERSER_ACTIVATE_THRESHOLD)
 		g_reverser_left_active = 1;
 	else if (g_reverser_left_active && reverser_left < TQ_REVERSER_RELEASE_THRESHOLD)
 		g_reverser_left_active = 0;
 
-	if (!g_reverser_right_active && acData.on_ground != 0 &&
-		throttle_right <= TQ_THROTTLE_IDLE_THRESHOLD &&
-		reverser_right > TQ_REVERSER_ACTIVATE_THRESHOLD)
+	if (!g_reverser_right_active && acData.on_ground != 0 && throttle_right <= TQ_THROTTLE_IDLE_THRESHOLD && reverser_right > TQ_REVERSER_ACTIVATE_THRESHOLD)
 		g_reverser_right_active = 1;
 	else if (g_reverser_right_active && reverser_right < TQ_REVERSER_RELEASE_THRESHOLD)
 		g_reverser_right_active = 0;
 
-	throttle_left_output = g_reverser_left_active ?
-		TQ_REVERSER_FULL_SCALE * reverser_left : throttle_left;
-	throttle_right_output = g_reverser_right_active ?
-		TQ_REVERSER_FULL_SCALE * reverser_right : throttle_right;
+	throttle_left_output = g_reverser_left_active ? TQ_REVERSER_FULL_SCALE * reverser_left : throttle_left;
+	throttle_right_output = g_reverser_right_active ? TQ_REVERSER_FULL_SCALE * reverser_right : throttle_right;
 
 	/*
 	 * A/T ARM by itself must not suppress manual thrust. Simulator ownership
@@ -1546,10 +1642,7 @@ static void ProcessTqLeverWrites(void)
 	 */
 	if (!TqAutothrottleOwnsLevers())
 	{
-		if (!g_throttle_left_written ||
-			throttle_left_output != g_last_throttle_left_written ||
-			absolute_difference(throttle_left_output,
-				acData.throttle_ratio_left) > TQ_THROTTLE_DATAREF_EPSILON)
+		if (!g_throttle_left_written || throttle_left_output != g_last_throttle_left_written || absolute_difference(throttle_left_output, acData.throttle_ratio_left) > TQ_THROTTLE_DATAREF_EPSILON)
 		{
 			if (set_float_dataref(DREF_THROTTLE_RATIO_LT, throttle_left_output))
 			{
@@ -1557,10 +1650,7 @@ static void ProcessTqLeverWrites(void)
 				g_throttle_left_written = 1;
 			}
 		}
-		if (!g_throttle_right_written ||
-			throttle_right_output != g_last_throttle_right_written ||
-			absolute_difference(throttle_right_output,
-				acData.throttle_ratio_right) > TQ_THROTTLE_DATAREF_EPSILON)
+		if (!g_throttle_right_written || throttle_right_output != g_last_throttle_right_written || absolute_difference(throttle_right_output, acData.throttle_ratio_right) > TQ_THROTTLE_DATAREF_EPSILON)
 		{
 			if (set_float_dataref(DREF_THROTTLE_RATIO_RT, throttle_right_output))
 			{
@@ -1580,10 +1670,8 @@ static void ProcessTqLeverWrites(void)
 	}
 	if (speedbrake_state != g_last_speedbrake_state)
 	{
-		static const char* state_name[] = { "DOWN", "ARMED", "FLIGHT", "UP" };
-		log_write("Physical speedbrake selected: %s (ADC %u, simulator %.3f)",
-			state_name[speedbrake_state], speedbrake_corrected,
-			speedbrake_output);
+		static const char* state_name[] = {"DOWN", "ARMED", "FLIGHT", "UP"};
+		log_write("Physical speedbrake selected: %s (ADC %u, simulator %.3f)", state_name[speedbrake_state], speedbrake_corrected, speedbrake_output);
 		g_last_speedbrake_state = speedbrake_state;
 	}
 
@@ -1604,8 +1692,7 @@ static void ProcessTqLeverWrites(void)
 		g_speedbrake_touchdown_time = XPLMGetElapsedTime();
 		g_speedbrake_auto_extend_issued = 0;
 		g_speedbrake_auto_retract_issued = 0;
-		if (speedbrake_state == TQ_SPEEDBRAKE_ARMED &&
-			pokeys_speedbrake_push_up_and_extend())
+		if (speedbrake_state == TQ_SPEEDBRAKE_ARMED && pokeys_speedbrake_push_up_and_extend())
 		{
 			g_speedbrake_auto_extend_issued = 1;
 			log_write("Touchdown with speedbrake ARMED: automatic full extension requested");
@@ -1619,15 +1706,7 @@ static void ProcessTqLeverWrites(void)
 	}
 	g_speedbrake_was_on_ground = acData.on_ground != 0;
 
-	if (acData.on_ground != 0 && !g_speedbrake_auto_retract_issued &&
-		g_speedbrake_touchdown_time > 0.0f &&
-		XPLMGetElapsedTime() - g_speedbrake_touchdown_time >=
-			TQ_SPEEDBRAKE_AUTO_RETRACT_DELAY_SECONDS &&
-		speedbrake_state == TQ_SPEEDBRAKE_UP &&
-		(throttle_left > TQ_THROTTLE_IDLE_THRESHOLD ||
-			throttle_right > TQ_THROTTLE_IDLE_THRESHOLD) &&
-		!g_reverser_left_active && !g_reverser_right_active &&
-		pokeys_speedbrake_retract_and_pull_down())
+	if (acData.on_ground != 0 && !g_speedbrake_auto_retract_issued && g_speedbrake_touchdown_time > 0.0f && XPLMGetElapsedTime() - g_speedbrake_touchdown_time >= TQ_SPEEDBRAKE_AUTO_RETRACT_DELAY_SECONDS && speedbrake_state == TQ_SPEEDBRAKE_UP && (throttle_left > TQ_THROTTLE_IDLE_THRESHOLD || throttle_right > TQ_THROTTLE_IDLE_THRESHOLD) && !g_reverser_left_active && !g_reverser_right_active && pokeys_speedbrake_retract_and_pull_down())
 	{
 		g_speedbrake_auto_retract_issued = 1;
 		log_write("Forward throttle advanced after landing: automatic speedbrake retraction requested");
@@ -1638,14 +1717,11 @@ static void ProcessTqLeverWrites(void)
 	 * the lever has not moved since connection. Afterwards, only a resolved
 	 * detent change is considered; ADC noise within a detent causes no writes.
 	 */
-	if ((!g_flaps_written || flaps_detent != g_last_flaps_detent) &&
-		drefTable[DREF_FLAPS_LEVER].handle != NULL &&
-		drefTable[DREF_FLAPS_LEVER].isWriteable)
+	if ((!g_flaps_written || flaps_detent != g_last_flaps_detent) && drefTable[DREF_FLAPS_LEVER].handle != NULL && drefTable[DREF_FLAPS_LEVER].isWriteable)
 	{
 		int first_sync = !g_flaps_written;
 		float desired = flaps_value[flaps_detent];
-		if (absolute_difference(acData.flaps_lever, desired) >
-			TQ_FLAPS_DATAREF_EPSILON)
+		if (absolute_difference(acData.flaps_lever, desired) > TQ_FLAPS_DATAREF_EPSILON)
 		{
 			if (!set_float_dataref(DREF_FLAPS_LEVER, desired))
 				return;
@@ -1654,15 +1730,12 @@ static void ProcessTqLeverWrites(void)
 		g_flaps_written = 1;
 		if (first_sync)
 		{
-			first_run_component_complete(TQ_FIRST_RUN_FLAPS,
-				"flap lever from hardware position");
-			log_write("Flap lever First Run synchronised from hardware: %s (ADC %u)",
-				flaps_name[flaps_detent], flaps_corrected);
+			first_run_component_complete(TQ_FIRST_RUN_FLAPS, "flap lever from hardware position");
+			log_write("Flap lever First Run synchronised from hardware: %s (ADC %u)", flaps_name[flaps_detent], flaps_corrected);
 		}
 		else
 		{
-			log_write("Flap lever selected: %s (ADC %u)",
-				flaps_name[flaps_detent], flaps_corrected);
+			log_write("Flap lever selected: %s (ADC %u)", flaps_name[flaps_detent], flaps_corrected);
 		}
 	}
 }
@@ -1699,9 +1772,7 @@ static void ProcessTqThrottleMotorFollow(void)
 	right = clamp_unit(acData.throttle_ratio_right);
 	left_target = (uint32_t)(left * 4095.0f + 0.5f);
 	right_target = (uint32_t)(right * 4095.0f + 0.5f);
-	pokeys_set_throttle_follow_targets(left_target, right_target,
-		g_control_calibration.lever1_min_speed,
-		g_control_calibration.lever2_min_speed, enabled);
+	pokeys_set_throttle_follow_targets(left_target, right_target, g_control_calibration.lever1_min_speed, g_control_calibration.lever2_min_speed, enabled);
 }
 
 /**********************************************************************************/
@@ -1717,11 +1788,10 @@ static void ProcessTqTogaButtons(state_table_p state)
 {
 	PokeysTogaInputs inputs;
 
-	if (state == NULL) return;
+	if (state == NULL)
+		return;
 	pokeys_get_toga_inputs(&inputs);
-	if (inputs.connected && inputs.valid && acData.at_arm > 0.0f &&
-		((inputs.left_pressed && state->lt_toga_prev != 1) ||
-			(inputs.right_pressed && state->rt_toga_prev != 1)))
+	if (inputs.connected && inputs.valid && acData.at_arm > 0.0f && ((inputs.left_pressed && state->lt_toga_prev != 1) || (inputs.right_pressed && state->rt_toga_prev != 1)))
 	{
 		g_toga_selected_since_at_arm = 1;
 		g_manual_throttle_disconnect_pending = 0;
@@ -1730,12 +1800,10 @@ static void ProcessTqTogaButtons(state_table_p state)
 	}
 
 	/* Invalid/disconnected input releases any command that was active. */
-	state->lt_toga = (int)((inputs.connected && inputs.valid) ?
-		inputs.left_pressed : 0);
+	state->lt_toga = (int)((inputs.connected && inputs.valid) ? inputs.left_pressed : 0);
 	left_toga_handler((void*)state);
 
-	state->rt_toga = (int)((inputs.connected && inputs.valid) ?
-		inputs.right_pressed : 0);
+	state->rt_toga = (int)((inputs.connected && inputs.valid) ? inputs.right_pressed : 0);
 	right_toga_handler((void*)state);
 }
 
@@ -1744,16 +1812,15 @@ static void ProcessTqAtDisconnectButtons(state_table_p state)
 {
 	PokeysAtDisconnectInputs inputs;
 
-	if (state == NULL) return;
+	if (state == NULL)
+		return;
 	pokeys_get_at_disconnect_inputs(&inputs);
 
 	/* Invalid/disconnected input releases any command that was active. */
-	state->lt_at_disco = (int)((inputs.connected && inputs.valid) ?
-		inputs.left_pressed : 0);
+	state->lt_at_disco = (int)((inputs.connected && inputs.valid) ? inputs.left_pressed : 0);
 	left_at_disco_handler((void*)state);
 
-	state->rt_at_disco = (int)((inputs.connected && inputs.valid) ?
-		inputs.right_pressed : 0);
+	state->rt_at_disco = (int)((inputs.connected && inputs.valid) ? inputs.right_pressed : 0);
 	right_at_disco_handler((void*)state);
 }
 
@@ -1766,7 +1833,8 @@ static void ProcessTqAtDisconnectButtons(state_table_p state)
 void ReleaseTqPushbuttonCommands(void* param)
 {
 	state_table_p ptr = (state_table_p)param;
-	if (ptr == NULL) return;
+	if (ptr == NULL)
+		return;
 
 	if (ptr->ltTogaIsActive && cmdTable[CMD_LT_TOGA].handle != NULL)
 		XPLMCommandEnd(cmdTable[CMD_LT_TOGA].handle);
@@ -1915,57 +1983,55 @@ void right_at_disco_handler(void* param)
 /* DATAREF HANDLERS, COMMAND HANDLERS & FLIGHTLOOP CALLBACK FROM HERE ON          */
 /**********************************************************************************/
 /* load the datref table */
-struct DREF_TABLE drefTable[DREF_END] = 
-{
+struct DREF_TABLE drefTable[DREF_END] = {
 	/* CFY TQ specific datarefs */
-	{.datarefName = "laminar/B738/electric/battery_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.battery_on},										// 0	DREF_BATTERY_ON                  FSUIPC offset 0x3102
-	{.datarefName = "sim/time/paused", .handle = NULL, .dataType = XP_INT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.paused},															// 1	DREF_SIM_PAUSED                  FSUIPC offset 0x0264
-	{.datarefName = "sim/flightmodel2/gear/on_ground", .handle = NULL, .dataType = XP_INT, .isArray = true, .arrayOffset = 2, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.on_ground},											// 2	DREF_ON_GROUND                   FSUIPC offset 0x0366
-	{.datarefName = "sim/flightmodel2/position/groundspeed", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.groundspeed_mps},								// 3	DREF_GND_SPEED                   FSUIPC offset 0x02B4
-	{.datarefName = "sim/flightmodel2/position/y_agl", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.radio_altitude_m},									// 4	DREF_RADIO_ALT                   FSUIPC offset 0x31E4
-	{.datarefName = "laminar/B738/parking_brake_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.parking_brake},										// 5	DREF_PARKING_BRAKE               FSUIPC offset 0x0BC8 (read only; release uses CMD_PB_SET)
-	{.datarefName = "sim/cockpit2/controls/left_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.left_brake},									// 6	DREF_LEFT_BRAKE                  FSUIPC offset 0x0BC4
-	{.datarefName = "sim/cockpit2/controls/right_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.right_brake},								// 7	DREF_RIGHT_BRAKE                 FSUIPC offset 0x0BC6
-	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.throttle_ratio_left},			// 8	DREF_THROTTLE_RATIO_LT           FSUIPC offset 0x088C
-	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.throttle_ratio_right},			// 9	DREF_THROTTLE_RATIO_RT           FSUIPC offset 0x0924
-	{.datarefName = "sim/flightmodel/controls/elv_trim", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.elevator_trim},									// 10	DREF_ELEVATOR_TRIM               FSUIPC offset 0x0BC2
-	{.datarefName = "laminar/B738/flt_ctrls/speedbrake_arm", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.speedbrake_armed},								// 11	DREF_SPD_BRAKE_ARM               FSUIPC offset 0x0BCC
-	{.datarefName = "laminar/B738/flt_ctrls/speedbrake_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.speedbrake_lever},							// 12	DREF_SPD_BRAKE_LEVER             FSUIPC offset 0x0BD0
-	{.datarefName = "laminar/B738/autopilot/autothrottle_arm_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.at_arm},								// 13	DREF_AUTO_THROTTLE_ARM           FSUIPC offset 0x0810
-	{.datarefName = "laminar/B738/autopilot/autothrottle_status1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.at_active},								// 14	DREF_AUTO_THROTTLE_ACT           /* no known FSUIPC offset */
-	{.datarefName = "laminar/autopilot/ap_on", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_engaged},												// 15	DREF_AP_ENGAGED                  FSUIPC offset 0x07BC
-	{.datarefName = "laminar/B738/annunciator/parking_brake", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pb_ind_raw},									// 16	DREF_PB_IND_RAW                  /* no known FSUIPC offset */
-	{.datarefName = "laminar/B738/toggle_switch/ap_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_trimlock_pos},						// 17	DREF_AP_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open
-	{.datarefName = "laminar/B738/toggle_switch/ap_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_trim_pos},								// 18	DREF_AP_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
-	{.datarefName = "laminar/B738/toggle_switch/el_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.el_trimlock_pos},						// 19	DREF_EL_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open
-	{.datarefName = "laminar/B738/toggle_switch/el_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.el_trim_pos},								// 20	DREF_EL_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
-	{.datarefName = "laminar/B738/engine/mixture_ratio1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.fuel_cutoff_lt},									// 21	DREF_FUEL_CUTOFF_LT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
-	{.datarefName = "laminar/B738/engine/mixture_ratio2", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.fuel_cutoff_rt},									// 22	DREF_FUEL_CUTOFF_RT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
-	{.datarefName = "laminar/B738/flt_ctrls/flap_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.flaps_lever},										// 23	DREF_FLAPS_LEVER                 FSUIPC offset 0x0BDC
-	{.datarefName = "laminar/B738/switch/capt_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.trim_pos_ca},										// 24	DREF_TRIM_POS_CA                 Captain yoke trim switch: 0/1=direction, 0.5=released
-	{.datarefName = "laminar/B738/switch/fo_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.trim_pos_fo},										// 25	DREF_TRIM_POS_FO                 First Officer yoke trim switch: 0/1=direction, 0.5=released
-	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pfd_speed_mode_ca},								// 26	DREF_PFD_SPD_MODE_CA
-	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pfd_speed_mode_fo},								// 27	DREF_PFD_SPD_MODE_FO
+	{.datarefName = "laminar/B738/electric/battery_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.battery_on},							  // 0	DREF_BATTERY_ON                  FSUIPC offset 0x3102
+	{.datarefName = "sim/time/paused", .handle = NULL, .dataType = XP_INT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.paused},												  // 1	DREF_SIM_PAUSED                  FSUIPC offset 0x0264
+	{.datarefName = "sim/flightmodel2/gear/on_ground", .handle = NULL, .dataType = XP_INT, .isArray = true, .arrayOffset = 2, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.on_ground},								  // 2	DREF_ON_GROUND                   FSUIPC offset 0x0366
+	{.datarefName = "sim/flightmodel2/position/groundspeed", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.groundspeed_mps},					  // 3	DREF_GND_SPEED                   FSUIPC offset 0x02B4
+	{.datarefName = "sim/flightmodel2/position/y_agl", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.radio_altitude_m},						  // 4	DREF_RADIO_ALT                   FSUIPC offset 0x31E4
+	{.datarefName = "laminar/B738/parking_brake_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.parking_brake},							  // 5	DREF_PARKING_BRAKE               FSUIPC offset 0x0BC8 (read only; release uses CMD_PB_SET)
+	{.datarefName = "sim/cockpit2/controls/left_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.left_brake},						  // 6	DREF_LEFT_BRAKE                  FSUIPC offset 0x0BC4
+	{.datarefName = "sim/cockpit2/controls/right_brake_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.right_brake},					  // 7	DREF_RIGHT_BRAKE                 FSUIPC offset 0x0BC6
+	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.throttle_ratio_left},  // 8	DREF_THROTTLE_RATIO_LT           FSUIPC offset 0x088C
+	{.datarefName = "sim/cockpit2/engine/actuators/throttle_jet_rev_ratio", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.throttle_ratio_right}, // 9	DREF_THROTTLE_RATIO_RT           FSUIPC offset 0x0924
+	{.datarefName = "sim/flightmodel/controls/elv_trim", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.elevator_trim},						  // 10	DREF_ELEVATOR_TRIM               FSUIPC offset 0x0BC2
+	{.datarefName = "laminar/B738/flt_ctrls/speedbrake_arm", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.speedbrake_armed},					  // 11	DREF_SPD_BRAKE_ARM               FSUIPC offset 0x0BCC
+	{.datarefName = "laminar/B738/flt_ctrls/speedbrake_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.speedbrake_lever},				  // 12	DREF_SPD_BRAKE_LEVER             FSUIPC offset 0x0BD0
+	{.datarefName = "laminar/B738/autopilot/autothrottle_arm_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.at_arm},					  // 13	DREF_AUTO_THROTTLE_ARM           FSUIPC offset 0x0810
+	{.datarefName = "laminar/B738/autopilot/autothrottle_status1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.at_active},					  // 14	DREF_AUTO_THROTTLE_ACT           /* no known FSUIPC offset */
+	{.datarefName = "laminar/autopilot/ap_on", .handle = NULL, .dataType = XP_DBL, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_engaged},									  // 15	DREF_AP_ENGAGED                  FSUIPC offset 0x07BC
+	{.datarefName = "laminar/B738/annunciator/parking_brake", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pb_ind_raw},						  // 16	DREF_PB_IND_RAW                  /* no known FSUIPC offset */
+	{.datarefName = "laminar/B738/toggle_switch/ap_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_trimlock_pos},			  // 17	DREF_AP_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open
+	{.datarefName = "laminar/B738/toggle_switch/ap_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.ap_trim_pos},					  // 18	DREF_AP_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
+	{.datarefName = "laminar/B738/toggle_switch/el_trim_lock_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.el_trimlock_pos},			  // 19	DREF_EL_TRIMLOCK_POS             /* no known FSUIPC offset */ 0=closed, 1=open
+	{.datarefName = "laminar/B738/toggle_switch/el_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.el_trim_pos},					  // 20	DREF_EL_TRIM_POS                 /* no known FSUIPC offset */ 0=normal, 1=cut out
+	{.datarefName = "laminar/B738/engine/mixture_ratio1", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.fuel_cutoff_lt},						  // 21	DREF_FUEL_CUTOFF_LT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
+	{.datarefName = "laminar/B738/engine/mixture_ratio2", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.fuel_cutoff_rt},						  // 22	DREF_FUEL_CUTOFF_RT              /* no known FSUIPC offset */ 0=cutoff, 1=idle
+	{.datarefName = "laminar/B738/flt_ctrls/flap_lever", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = true, .isEmittable = true, .ptrVal = (void*)&acData.flaps_lever},							  // 23	DREF_FLAPS_LEVER                 FSUIPC offset 0x0BDC
+	{.datarefName = "laminar/B738/switch/capt_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.trim_pos_ca},							  // 24	DREF_TRIM_POS_CA                 Captain yoke trim switch: 0/1=direction, 0.5=released
+	{.datarefName = "laminar/B738/switch/fo_trim_pos", .handle = NULL, .dataType = XP_FLT, .isArray = false, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.trim_pos_fo},							  // 25	DREF_TRIM_POS_FO                 First Officer yoke trim switch: 0/1=direction, 0.5=released
+	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 0, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pfd_speed_mode_ca},					  // 26	DREF_PFD_SPD_MODE_CA
+	{.datarefName = "laminar/B738/autopilot/pfd_spd_mode", .handle = NULL, .dataType = XP_FLT, .isArray = true, .arrayOffset = 1, .arrayCount = 1, .isWriteable = false, .isEmittable = true, .ptrVal = (void*)&acData.pfd_speed_mode_fo},					  // 27	DREF_PFD_SPD_MODE_FO
 };
 
 /* load the command table */
-struct CMD_TABLE cmdTable[CMD_END] =
-{
-	{.commandName = "laminar/B738/autopilot/left_at_dis_press", .handle = NULL},        // 0 CMD_LT_AT_DISCO
-	{.commandName = "laminar/B738/autopilot/right_at_dis_press", .handle = NULL},       // 1 CMD_RT_AT_DISCO
-	{.commandName = "laminar/B738/autopilot/left_toga_press", .handle = NULL},          // 2 CMD_LT_TOGA
-	{.commandName = "laminar/B738/autopilot/right_toga_press", .handle = NULL},         // 3 CMD_RT_TOGA
-	{.commandName = "laminar/B738/toggle_switch/el_trim", .handle = NULL},              // 4 CMD_EL_TRIM
-	{.commandName = "laminar/B738/toggle_switch/el_trim_lock", .handle = NULL},         // 5 CMD_EL_TRIMLOCK
-	{.commandName = "laminar/B738/toggle_switch/ap_trim", .handle = NULL},              // 6 CMD_AP_TRIM
-	{.commandName = "laminar/B738/toggle_switch/ap_trim_lock", .handle = NULL},         // 7 CMD_AP_TRIMLOCK
-	{.commandName = "sim/flight_controls/brakes_toggle_max", .handle = NULL},           // 8 CMD_PB_SET
+struct CMD_TABLE cmdTable[CMD_END] = {
+	{.commandName = "laminar/B738/autopilot/left_at_dis_press", .handle = NULL},  // 0 CMD_LT_AT_DISCO
+	{.commandName = "laminar/B738/autopilot/right_at_dis_press", .handle = NULL}, // 1 CMD_RT_AT_DISCO
+	{.commandName = "laminar/B738/autopilot/left_toga_press", .handle = NULL},	  // 2 CMD_LT_TOGA
+	{.commandName = "laminar/B738/autopilot/right_toga_press", .handle = NULL},	  // 3 CMD_RT_TOGA
+	{.commandName = "laminar/B738/toggle_switch/el_trim", .handle = NULL},		  // 4 CMD_EL_TRIM
+	{.commandName = "laminar/B738/toggle_switch/el_trim_lock", .handle = NULL},	  // 5 CMD_EL_TRIMLOCK
+	{.commandName = "laminar/B738/toggle_switch/ap_trim", .handle = NULL},		  // 6 CMD_AP_TRIM
+	{.commandName = "laminar/B738/toggle_switch/ap_trim_lock", .handle = NULL},	  // 7 CMD_AP_TRIMLOCK
+	{.commandName = "sim/flight_controls/brakes_toggle_max", .handle = NULL},	  // 8 CMD_PB_SET
 };
 
 /* find the datarefs and load the drefTable with the opaque handles */
 void GetDataRefHandles(void)
 {
-	uint16_t	ctr;
+	uint16_t ctr;
 
 	for (ctr = 0; ctr < DREF_END; ctr++)
 	{
@@ -1980,7 +2046,7 @@ void GetDataRefHandles(void)
 /* find the commands and load the cmdTable with the opaque handles */
 void GetCommandHandles(void)
 {
-	uint16_t	ctr;
+	uint16_t ctr;
 
 	for (ctr = 0; ctr < CMD_END; ctr++)
 	{
@@ -2003,36 +2069,36 @@ static void RefreshMissingAircraftHandles(void)
 {
 	float now = XPLMGetElapsedTime();
 	uint16_t index;
-	if (now < g_next_handle_retry_time) return;
+	if (now < g_next_handle_retry_time)
+		return;
 	g_next_handle_retry_time = now + TQ_HANDLE_RETRY_SECONDS;
 
 	for (index = 0; index < DREF_END; ++index)
 	{
-		if (drefTable[index].handle != NULL) continue;
+		if (drefTable[index].handle != NULL)
+			continue;
 		drefTable[index].handle = XPLMFindDataRef(drefTable[index].datarefName);
 		if (drefTable[index].handle != NULL)
-			log_write("Recovered late dataref index[%04u] '%s'", index,
-				drefTable[index].datarefName);
+			log_write("Recovered late dataref index[%04u] '%s'", index, drefTable[index].datarefName);
 	}
 	for (index = 0; index < CMD_END; ++index)
 	{
-		if (cmdTable[index].handle != NULL) continue;
+		if (cmdTable[index].handle != NULL)
+			continue;
 		cmdTable[index].handle = XPLMFindCommand(cmdTable[index].commandName);
 		if (cmdTable[index].handle != NULL)
-			log_write("Recovered late command index[%04u] '%s'", index,
-				cmdTable[index].commandName);
+			log_write("Recovered late command index[%04u] '%s'", index, cmdTable[index].commandName);
 	}
-	for (index = 0; index < (uint16_t)(sizeof(g_trim_command_bindings) /
-		sizeof(g_trim_command_bindings[0])); ++index)
+	for (index = 0; index < (uint16_t)(sizeof(g_trim_command_bindings) / sizeof(g_trim_command_bindings[0])); ++index)
 	{
 		TqTrimCommandBinding* binding = &g_trim_command_bindings[index];
-		if (binding->handle != NULL) continue;
+		if (binding->handle != NULL)
+			continue;
 		binding->handle = XPLMFindCommand(binding->name);
 		if (binding->handle != NULL)
 		{
 			binding->active = 0;
-			XPLMRegisterCommandHandler(binding->handle,
-				tq_trim_command_handler, 1, binding);
+			XPLMRegisterCommandHandler(binding->handle, tq_trim_command_handler, 1, binding);
 			g_trim_command_handlers_registered = 1;
 			log_write("Recovered late manual trim command '%s'", binding->name);
 		}
@@ -2042,14 +2108,14 @@ static void RefreshMissingAircraftHandles(void)
 /* get the dataref values from the simulator and into the drefTable */
 void GetDataRefValues(void* arg)
 {
-	uint16_t	ctr;
+	uint16_t ctr;
 	drefTable_p ptrTable = &drefTable[0];
 
 	state_table_p state = (state_table_p)arg;
 
 	for (ctr = 0; ctr < DREF_END; ctr++)
 	{
-		if (ptrTable->handle != NULL)															// only get the dataref value if we have a valid handle
+		if (ptrTable->handle != NULL) // only get the dataref value if we have a valid handle
 		{
 			/*!
 			 * get acDataBlock values
@@ -2124,12 +2190,13 @@ float GetAircraftDataFLCB(float elapsedMe, float elapsedSim, int counter, void* 
 	/* get the dataref values and populate the acData structure */
 	GetDataRefValues((void*)state);
 	LogRequestedAircraftStateChanges();
-	g_aircraft_data_valid = g_aircraft_active &&
-		drefTable[DREF_BATTERY_ON].handle != NULL &&
-		drefTable[DREF_ON_GROUND].handle != NULL;
+	g_aircraft_data_valid = g_aircraft_active && drefTable[DREF_BATTERY_ON].handle != NULL && drefTable[DREF_ON_GROUND].handle != NULL;
 
 	/* adjust data block variables as required */
-	if (acData.pb_ind_raw > 0.0f) acData.pb_indicator = 1; else acData.pb_indicator = 0;			// set the parking brake indicator
+	if (acData.pb_ind_raw > 0.0f)
+		acData.pb_indicator = 1;
+	else
+		acData.pb_indicator = 0; // set the parking brake indicator
 
 	/* A/T control */
 	UpdateTqAutothrottleSession();
@@ -2142,12 +2209,12 @@ float GetAircraftDataFLCB(float elapsedMe, float elapsedSim, int counter, void* 
 	ProcessTqAtDisconnectButtons(state);
 	ProcessTqFuelCutoffSwitches();
 	ProcessTqTrimCutoutSwitches();
-	
+
 	/* All X-Plane writes follow the completed read pass and are change-driven. */
 	ProcessTqParkingBrake();
 	ProcessTqTrim();
 	ProcessTqLeverWrites();
 	ProcessTqThrottleMotorFollow();
 
-	return(flcbReturn);
+	return (flcbReturn);
 }

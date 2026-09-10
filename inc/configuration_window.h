@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: configuration_window.h                                              */
-/*   VERSION: 1.0.4                                                               */
+/*   VERSION: 1.0.5                                                               */
 /*      DATE: 07 SEP 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -13,8 +13,7 @@
 
 #include "datastructures.h"
 
-int configuration_window_initialise(PluginConfig* config,
-	TqCalibration* calibration);
+int configuration_window_initialise(PluginConfig* config, TqCalibration* calibration);
 void configuration_window_shutdown(void);
 void configuration_window_show(void);
 

@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: calibration_window.c                                                */
-/*   VERSION: 1.0.4                                                               */
+/*   VERSION: 1.0.5                                                               */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -29,9 +29,9 @@
 #include "log.h"
 #include "pokeys_thread.h"
 
-#define CAL_WINDOW_WIDTH  850
+#define CAL_WINDOW_WIDTH 850
 #define CAL_WINDOW_HEIGHT 540
-#define DISPLAYED_LEVERS  6
+#define DISPLAYED_LEVERS 6
 
 typedef struct LeverDefinition
 {
@@ -39,15 +39,7 @@ typedef struct LeverDefinition
 	int source_index;
 } LeverDefinition;
 
-static const LeverDefinition g_definition[DISPLAYED_LEVERS] = 
-{
-	{ "Throttle 1", POKEYS_LEVER_THROTTLE_1 },
-	{ "Throttle 2", POKEYS_LEVER_THROTTLE_2 },
-	{ "Speed brake", POKEYS_LEVER_SPEED_BRAKE },
-	{ "Left reverser", POKEYS_LEVER_REVERSER_1 },
-	{ "Right reverser", POKEYS_LEVER_REVERSER_2 },
-	{ "Flaps", POKEYS_LEVER_FLAPS }
-};
+static const LeverDefinition g_definition[DISPLAYED_LEVERS] = {{"Throttle 1", POKEYS_LEVER_THROTTLE_1}, {"Throttle 2", POKEYS_LEVER_THROTTLE_2}, {"Speed brake", POKEYS_LEVER_SPEED_BRAKE}, {"Left reverser", POKEYS_LEVER_REVERSER_1}, {"Right reverser", POKEYS_LEVER_REVERSER_2}, {"Flaps", POKEYS_LEVER_FLAPS}};
 
 static XPLMWindowID g_window;
 static TqCalibration* g_calibration;
@@ -75,7 +67,7 @@ static void set_open_gl_ui_state(void)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
-static void draw_filled_rectangle(int left, int bottom, int right, int top,	float red, float green, float blue, float alpha)
+static void draw_filled_rectangle(int left, int bottom, int right, int top, float red, float green, float blue, float alpha)
 {
 	set_open_gl_ui_state();
 	glColor4f(red, green, blue, alpha);
@@ -98,8 +90,7 @@ static void draw_filled_rectangle(int left, int bottom, int right, int top,	floa
  * reliably by the plugin, so scanlines provide a deterministic solid fill
  * without depending on the host's polygon rasterisation state.
  */
-static void draw_opaque_filled_rectangle(int left, int bottom, int right,
-	int top, float red, float green, float blue)
+static void draw_opaque_filled_rectangle(int left, int bottom, int right, int top, float red, float green, float blue)
 {
 	int y;
 
@@ -151,21 +142,23 @@ static void draw_position_meter(int column_left, int top, uint32_t value, int va
 	int fill_top = inner_bottom;
 	int tick;
 
-	if (value > 4095U) value = 4095U;
+	if (value > 4095U)
+		value = 4095U;
 	if (valid)
 		fill_top += (int)((uint64_t)value * (uint64_t)inner_height / 4095U);
 
-	draw_filled_rectangle(meter_left, meter_bottom, meter_right, meter_top,	0.055f, 0.075f, 0.095f, 1.00f);
+	draw_filled_rectangle(meter_left, meter_bottom, meter_right, meter_top, 0.055f, 0.075f, 0.095f, 1.00f);
 	if (valid && value > 0U)
 	{
-		if (fill_top <= inner_bottom) fill_top = inner_bottom + 1;
+		if (fill_top <= inner_bottom)
+			fill_top = inner_bottom + 1;
 		draw_filled_rectangle(meter_left + 3, inner_bottom, meter_right - 3, fill_top, 0.12f, 0.78f, 0.28f, 1.00f);
 	}
 
 	set_open_gl_ui_state();
 	glColor4f(0.46f, 0.58f, 0.68f, 0.90f);
 	glBegin(GL_LINES);
-	for (tick = 0; tick <= 10; ++tick) 
+	for (tick = 0; tick <= 10; ++tick)
 	{
 		int y = meter_bottom + tick * meter_height / 10;
 		int tick_length = (tick % 5 == 0) ? 10 : 6;
@@ -175,10 +168,10 @@ static void draw_position_meter(int column_left, int top, uint32_t value, int va
 		glVertex2i(meter_right + tick_length, y);
 	}
 	glEnd();
-	
-	if (valid) 
+
+	if (valid)
 	{
-		draw_filled_triangle(meter_left - 12, fill_top,	meter_left - 2, fill_top + 6, meter_left - 2, fill_top - 6,	1.00f, 0.82f, 0.18f, 1.00f);
+		draw_filled_triangle(meter_left - 12, fill_top, meter_left - 2, fill_top + 6, meter_left - 2, fill_top - 6, 1.00f, 0.82f, 0.18f, 1.00f);
 		draw_filled_triangle(meter_right + 12, fill_top, meter_right + 2, fill_top + 6, meter_right + 2, fill_top - 6, 1.00f, 0.82f, 0.18f, 1.00f);
 	}
 	draw_rectangle_outline(meter_left, meter_bottom, meter_right, meter_top, valid ? 0.45f : 0.32f, valid ? 0.92f : 0.36f, valid ? 0.58f : 0.40f, 1.00f);
@@ -188,25 +181,37 @@ static uint32_t* minimum_value(TqCalibration* value, int lever)
 {
 	switch (lever)
 	{
-	case 0: return &value->lever1_min_position;
-	case 1: return &value->lever2_min_position;
-	case 2: return &value->spoiler_min_position;
-	case 3: return &value->reverser1_min_position;
-	case 4: return &value->reverser2_min_position;
-	default: return &value->flaps_min_position;
+	case 0:
+		return &value->lever1_min_position;
+	case 1:
+		return &value->lever2_min_position;
+	case 2:
+		return &value->spoiler_min_position;
+	case 3:
+		return &value->reverser1_min_position;
+	case 4:
+		return &value->reverser2_min_position;
+	default:
+		return &value->flaps_min_position;
 	}
 }
 
 static uint32_t* maximum_value(TqCalibration* value, int lever)
 {
-	switch (lever) 
+	switch (lever)
 	{
-	case 0: return &value->lever1_max_position;
-	case 1: return &value->lever2_max_position;
-	case 2: return &value->spoiler_max_position;
-	case 3: return &value->reverser1_max_position;
-	case 4: return &value->reverser2_max_position;
-	default: return &value->flaps_max_position;
+	case 0:
+		return &value->lever1_max_position;
+	case 1:
+		return &value->lever2_max_position;
+	case 2:
+		return &value->spoiler_max_position;
+	case 3:
+		return &value->reverser1_max_position;
+	case 4:
+		return &value->reverser2_max_position;
+	default:
+		return &value->flaps_max_position;
 	}
 }
 
@@ -214,7 +219,7 @@ static int all_captured(void)
 {
 	int lever;
 	for (lever = 0; lever < DISPLAYED_LEVERS; ++lever)
-		if (!g_min_captured[lever] || !g_max_captured[lever]) 
+		if (!g_min_captured[lever] || !g_max_captured[lever])
 			return (0);
 	return (1);
 }
@@ -222,7 +227,7 @@ static int all_captured(void)
 static int calibration_ranges_valid(void)
 {
 	int lever;
-	for (lever = 0; lever < DISPLAYED_LEVERS; ++lever) 
+	for (lever = 0; lever < DISPLAYED_LEVERS; ++lever)
 	{
 		uint32_t minimum = *minimum_value(&g_working, lever);
 		uint32_t maximum = *maximum_value(&g_working, lever);
@@ -234,21 +239,19 @@ static int calibration_ranges_valid(void)
 
 static void draw_button(const char* label, int left, int bottom, int right, int top, int enabled)
 {
-	static float text_colour[] = { 1.0f, 1.0f, 1.0f };
-	draw_opaque_filled_rectangle(left, bottom, right, top,
-		enabled ? 0.12f : 0.08f, enabled ? 0.25f : 0.10f,
-		enabled ? 0.34f : 0.12f);
+	static float text_colour[] = {1.0f, 1.0f, 1.0f};
+	draw_opaque_filled_rectangle(left, bottom, right, top, enabled ? 0.12f : 0.08f, enabled ? 0.25f : 0.10f, enabled ? 0.34f : 0.12f);
 	draw_rectangle_outline(left, bottom, right, top, enabled ? 0.30f : 0.22f, enabled ? 0.78f : 0.25f, enabled ? 0.96f : 0.28f, 1.00f);
 	draw_text(label, left + 14, bottom + 8, text_colour);
 }
 
 static void draw_calibration_window(XPLMWindowID window, void* refcon)
 {
-	static float heading_colour[] = { 0.30f, 0.85f, 1.00f };
-	static float normal_colour[] = { 1.00f, 1.00f, 1.00f };
-	static float active_colour[] = { 0.25f, 1.00f, 0.35f };
-	static float warning_colour[] = { 1.00f, 0.65f, 0.20f };
-	static float copyright_colour[] = { 0.80f, 0.84f, 0.90f };
+	static float heading_colour[] = {0.30f, 0.85f, 1.00f};
+	static float normal_colour[] = {1.00f, 1.00f, 1.00f};
+	static float active_colour[] = {0.25f, 1.00f, 0.35f};
+	static float warning_colour[] = {1.00f, 0.65f, 0.20f};
+	static float copyright_colour[] = {0.80f, 0.84f, 0.90f};
 	PokeysLeverPositions positions;
 	int left, top, right, bottom, lever;
 	int detent_ready;
@@ -260,10 +263,10 @@ static void draw_calibration_window(XPLMWindowID window, void* refcon)
 	message = g_calibrating && !detent_ready ? "Waiting for speedbrake flight-detent lock to retract..." : g_message;
 	XPLMGetWindowGeometry(window, &left, &top, &right, &bottom);
 
-	draw_text(g_calibrating ? "TQ hardware calibration" : "TQ lever positions",	left + 20, top - 35, heading_colour);
-	draw_text(message, left + 20, top - 60,	positions.valid && detent_ready ? normal_colour : warning_colour);
+	draw_text(g_calibrating ? "TQ hardware calibration" : "TQ lever positions", left + 20, top - 35, heading_colour);
+	draw_text(message, left + 20, top - 60, positions.valid && detent_ready ? normal_colour : warning_colour);
 
-	for (lever = 0; lever < DISPLAYED_LEVERS; ++lever) 
+	for (lever = 0; lever < DISPLAYED_LEVERS; ++lever)
 	{
 		int column_left = left + 18 + lever * 138;
 		uint32_t value = positions.value[g_definition[lever].source_index];
@@ -273,7 +276,7 @@ static void draw_calibration_window(XPLMWindowID window, void* refcon)
 		snprintf(text, sizeof(text), "Raw: %4u", positions.valid ? value : 0U);
 		draw_text(text, column_left + 12, top - 278, normal_colour);
 
-		if (g_calibrating) 
+		if (g_calibrating)
 		{
 			draw_button("Set MIN", column_left, top - 329, column_left + 118, top - 300, positions.valid && detent_ready && !g_min_captured[lever]);
 			draw_button("Set MAX", column_left, top - 367, column_left + 118, top - 338, positions.valid && detent_ready && !g_max_captured[lever]);
@@ -284,12 +287,10 @@ static void draw_calibration_window(XPLMWindowID window, void* refcon)
 		}
 	}
 
-	if (g_calibrating) 
+	if (g_calibrating)
 	{
-		draw_button("Save calibration", left + 18, top - 460,
-			left + 168, top - 426, detent_ready && all_captured());
-		draw_button("Cancel", left + 186, top - 460,
-			left + 296, top - 426, 1);
+		draw_button("Save calibration", left + 18, top - 460, left + 168, top - 426, detent_ready && all_captured());
+		draw_button("Cancel", left + 186, top - 460, left + 296, top - 426, 1);
 	}
 	if (!g_calibrating)
 		draw_button("Close", left + 365, top - 452, left + 485, top - 418, 1);
@@ -307,10 +308,11 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 	PokeysLeverPositions positions;
 	int left, top, right, bottom, lever;
 	(void)refcon;
-	if (mouse != xplm_MouseDown) return 1;
+	if (mouse != xplm_MouseDown)
+		return 1;
 	XPLMGetWindowGeometry(window, &left, &top, &right, &bottom);
 
-	if (!g_calibrating) 
+	if (!g_calibrating)
 	{
 		if (inside(x, y, left + 365, top - 452, left + 485, top - 418))
 		{
@@ -329,24 +331,24 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 		return (1);
 	}
 
-	if (!pokeys_is_flight_detent_retracted()) 
+	if (!pokeys_is_flight_detent_retracted())
 	{
 		strcpy_s(g_message, sizeof(g_message), "Calibration blocked until the speedbrake flight-detent lock is retracted");
 		return (1);
 	}
-	
+
 	pokeys_get_lever_positions(&positions);
 
-	for (lever = 0; lever < DISPLAYED_LEVERS; ++lever) 
+	for (lever = 0; lever < DISPLAYED_LEVERS; ++lever)
 	{
 		int column_left = left + 18 + lever * 138;
 		uint32_t value = positions.value[g_definition[lever].source_index];
-	
-		if (positions.valid && !g_min_captured[lever] && inside(x, y, column_left, top - 329, column_left + 118, top - 300)) 
+
+		if (positions.valid && !g_min_captured[lever] && inside(x, y, column_left, top - 329, column_left + 118, top - 300))
 		{
 			*minimum_value(&g_working, lever) = value;
 			g_min_captured[lever] = 1;
-			snprintf(g_message, sizeof(g_message), "%s minimum captured at %u",	g_definition[lever].name, value);
+			snprintf(g_message, sizeof(g_message), "%s minimum captured at %u", g_definition[lever].name, value);
 			return (1);
 		}
 
@@ -361,18 +363,18 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 
 	if (inside(x, y, left + 18, top - 460, left + 168, top - 426))
 	{
-		if (!all_captured()) 
+		if (!all_captured())
 		{
 			strcpy_s(g_message, sizeof(g_message), "Capture MIN and MAX for every lever before saving");
 		}
-		else if (!calibration_ranges_valid()) 
+		else if (!calibration_ranges_valid())
 		{
 			strcpy_s(g_message, sizeof(g_message), "Invalid range: every MAX must exceed MIN by at least 100 counts");
 		}
-		else 
+		else
 		{
 			strcpy_s(g_working.calibration_id, sizeof(g_working.calibration_id), TQ_CALIBRATION_ID);
-			if (tq_calibration_write(&g_working)) 
+			if (tq_calibration_write(&g_working))
 			{
 				*g_calibration = g_working;
 				TqControlsSetCalibration(&g_working, 1);
@@ -384,7 +386,7 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 				strcpy_s(g_message, sizeof(g_message), "Calibration saved successfully. Select Close when finished.");
 				log_write("Manual TQ lever calibration completed");
 			}
-			else 
+			else
 			{
 				strcpy_s(g_message, sizeof(g_message), "Unable to save calibration file; see log");
 			}
@@ -396,18 +398,31 @@ static int handle_mouse(XPLMWindowID window, int x, int y, XPLMMouseStatus mouse
 
 static void handle_key(XPLMWindowID window, char key, XPLMKeyFlags flags, char virtual_key, void* refcon, int losing_focus)
 {
-	(void)window; (void)key; (void)flags; (void)virtual_key; (void)refcon; (void)losing_focus;
+	(void)window;
+	(void)key;
+	(void)flags;
+	(void)virtual_key;
+	(void)refcon;
+	(void)losing_focus;
 }
 
 static XPLMCursorStatus handle_cursor(XPLMWindowID window, int x, int y, void* refcon)
 {
-	(void)window; (void)x; (void)y; (void)refcon;
+	(void)window;
+	(void)x;
+	(void)y;
+	(void)refcon;
 	return (xplm_CursorArrow);
 }
 
 static int handle_wheel(XPLMWindowID window, int x, int y, int wheel, int clicks, void* refcon)
 {
-	(void)window; (void)x; (void)y; (void)wheel; (void)clicks; (void)refcon;
+	(void)window;
+	(void)x;
+	(void)y;
+	(void)wheel;
+	(void)clicks;
+	(void)refcon;
 	return (1);
 }
 
@@ -434,9 +449,9 @@ int calibration_window_initialise(TqCalibration* calibration)
 	parameters.handleRightClickFunc = handle_mouse;
 	g_window = XPLMCreateWindowEx(&parameters);
 
-	if (!g_window) 
+	if (!g_window)
 		return (0);
-	
+
 	XPLMSetWindowTitle(g_window, "xpCFY_TQ Lever Positions and Calibration");
 	XPLMSetWindowResizingLimits(g_window, CAL_WINDOW_WIDTH, CAL_WINDOW_HEIGHT, CAL_WINDOW_WIDTH, CAL_WINDOW_HEIGHT);
 	XPLMSetWindowPositioningMode(g_window, xplm_WindowPositionFree, -1);
@@ -446,14 +461,15 @@ int calibration_window_initialise(TqCalibration* calibration)
 void calibration_window_shutdown(void)
 {
 	pokeys_set_calibration_active(0);
-	if (g_window) XPLMDestroyWindow(g_window);
+	if (g_window)
+		XPLMDestroyWindow(g_window);
 	g_window = NULL;
 	g_calibration = NULL;
 }
 
 void calibration_window_show_positions(void)
 {
-	if (!g_window) 
+	if (!g_window)
 		return;
 	pokeys_set_calibration_active(0);
 	g_calibrating = 0;
@@ -465,7 +481,8 @@ void calibration_window_show_positions(void)
 
 void calibration_window_begin(int automatic_request)
 {
-	if (!g_window || !g_calibration) return;
+	if (!g_window || !g_calibration)
+		return;
 	/* The worker confirms the active-low pin 30 release before capture is enabled. */
 	pokeys_set_calibration_active(1);
 	g_working = *g_calibration;

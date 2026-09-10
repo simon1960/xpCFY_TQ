@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: acf_dref.h                                                          */
-/*   VERSION: 1.0.4                                                                 */
+/*   VERSION: 1.0.5                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -27,13 +27,15 @@ extern void GetDataRefHandles(void);
 extern void GetCommandHandles(void);
 extern void UnregisterTqTrimCommandHandlers(void);
 extern void ReleaseTqPushbuttonCommands(void* param);
-extern float GetAircraftDataFLCB(float elapsedMe, float elapsedSim, int counter, void* inRefcon);		// data gatherer function
+extern float GetAircraftDataFLCB(float elapsedMe, float elapsedSim, int counter, void* inRefcon); // data gatherer function
 
 /* TQ calibration and test */
 extern void TqControlsSetCalibration(const TqCalibration* calibration, int valid);
 extern void TqControlsReset(void);
 extern void TqControlsDeactivate(void);
 extern void TqControlsSetAircraftActive(int active);
+extern void TqControlsSetEnhancedTrimLogging(int enabled);
+extern void TqControlsSetTrimMotorVariant(uint32_t variant);
 extern int TqGroundTestControlsAllowed(void);
 
 #endif // !_ACF_DREF_H_

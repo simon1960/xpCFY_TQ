@@ -1,6 +1,6 @@
 # xpCFY_TQ
 
-`xpCFY_TQ` version 1.0.4 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
+`xpCFY_TQ` version 1.0.5 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
 quadrants. It connects X-Plane 12 and the Zibo 737/LevelUp V2 to CFY TQ V3, V4 and V4 Pro
 hardware through a PoKeys controller.
 
@@ -96,6 +96,19 @@ The saved `[connection]` section contains a readable
 the legacy `network_use_udp=0|1` entry for compatibility. Existing files that
 lack `network_protocol` are migrated automatically at startup, and every save
 is read back to verify that the selected protocol reached disk.
+
+Enhanced diagnostic logging is controlled by `enhanced_logging=0|1`. It defaults
+to off for new configuration files and is also set to off when an existing file
+lacks the entry. The migrated value is written back to the configuration file.
+
+At the start of V3 First Run synchronisation, the first accepted trim-wheel
+position must be within the central ADC range of 1059 through 3036. If the
+initial position is outside this range, the plugin
+inhibits the trim motor and displays a warning directing the user to switch off
+the MAIN ELEC cutout and manually rotate the wheel NOSE UP or NOSE DOWN as
+appropriate. A confirmation is displayed when the position becomes valid, after
+which normal simulator-owned trim synchronisation continues. The check is then
+latched complete and cannot interrupt subsequent motor-driven synchronisation.
 
 The plugin creates its runtime files beside `xpCFY_TQ.xpl`:
 

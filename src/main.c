@@ -1,13 +1,12 @@
 /**********************************************************************************/
 /* FILE NAME: main.c                                                              */
-/*   VERSION: 1.0.4                                                                 */
+/*   VERSION: 1.0.5                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
 /*                                                                                */
 /* DESCRIPTION: CockpitForYou Motorised TQplugin for X-Plane 12.                  */
 /**********************************************************************************/
-
 
 /* standard include files */
 #include <stdio.h>
@@ -47,36 +46,36 @@
 #endif
 
 /* X-Plane version used during aircraft validation */
-static int				xPlaneVersion;
+static int xPlaneVersion;
 
 /* local variables */
-static TqCalibration	g_calibration;
-static PluginConfig		g_config;
-static int				g_started;
-static int				g_enabled;
-static int				g_deferred_callback_registered;
-static int				g_detent_callback_registered;
-static int				g_calibration_required;
+static TqCalibration g_calibration;
+static PluginConfig g_config;
+static int g_started;
+static int g_enabled;
+static int g_deferred_callback_registered;
+static int g_detent_callback_registered;
+static int g_calibration_required;
 
 enum DeferredInitStage
 {
 	DEFER_INIT_VALIDATE_AIRCRAFT = 0,
 	DEFER_INIT_WAIT_FOR_PARKING_BRAKE_RELEASE
 };
-static int				g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
+static int g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
 
 /* state table pointer */
-state_table_p			state;
+state_table_p state;
 
 /* system datarefs */
-const char				*szAcfTailNumDataRef = "sim/aircraft/view/acf_tailnum";
-const char				*szAcfDescriptionDataRef = "sim/aircraft/view/acf_descrip";
-const char				*szXplaneVersionDataRef = "sim/version/xplane_internal_version";
+const char* szAcfTailNumDataRef = "sim/aircraft/view/acf_tailnum";
+const char* szAcfDescriptionDataRef = "sim/aircraft/view/acf_descrip";
+const char* szXplaneVersionDataRef = "sim/version/xplane_internal_version";
 
-XPLMDataRef				drAcfTailNum;																// aircraft tail number
-XPLMDataRef				drAcfDescription;															// aircraft description
-XPLMDataRef				drXplaneVersion;															// x-plane version number
-XPLMDataRef				drOnGround;
+XPLMDataRef drAcfTailNum;	  // aircraft tail number
+XPLMDataRef drAcfDescription; // aircraft description
+XPLMDataRef drXplaneVersion;  // x-plane version number
+XPLMDataRef drOnGround;
 
 /* forward declaration of functions */
 bool CheckValidAcf(char* acf_loaded, char* acf_compare);
@@ -88,7 +87,9 @@ static void StopOperationalRuntime(void);
 #if IBM
 BOOL APIENTRY DllMain(HANDLE module, DWORD reason, LPVOID reserved)
 {
-	(void)module; (void)reason; (void)reserved;
+	(void)module;
+	(void)reason;
+	(void)reserved;
 	return TRUE;
 }
 #endif
@@ -106,23 +107,23 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 	XPLMEnableFeature("XPLM_USE_NATIVE_PATHS", 1);
 
 	/* get the plugin paht */
-	if (!plugin_paths_initialise()) 
+	if (!plugin_paths_initialise())
 	{
 		XPLMDebugString("xpCFY_TQ: unable to determine the plugin directory\n");
 		return (0);
 	}
 
 	/* get the system datarefs */
-	drAcfTailNum = XPLMFindDataRef(szAcfTailNumDataRef);											// get an opaque handle to the aircraft tail number
-	drAcfDescription = XPLMFindDataRef(szAcfDescriptionDataRef);									// get an opaque handle to the aircraft description
-	drXplaneVersion = XPLMFindDataRef(szXplaneVersionDataRef);										// get a handle to the internal x-plane version number
-	drOnGround = XPLMFindDataRef("sim/flightmodel/failures/onground_any");							// get a handle to the on ground state
+	drAcfTailNum = XPLMFindDataRef(szAcfTailNumDataRef);				   // get an opaque handle to the aircraft tail number
+	drAcfDescription = XPLMFindDataRef(szAcfDescriptionDataRef);		   // get an opaque handle to the aircraft description
+	drXplaneVersion = XPLMFindDataRef(szXplaneVersionDataRef);			   // get a handle to the internal x-plane version number
+	drOnGround = XPLMFindDataRef("sim/flightmodel/failures/onground_any"); // get a handle to the on ground state
 
 	/* initialise logging */
 	if (!log_initialise())
 	{
 		XPLMDebugString("xpCFY_TQ: unable to initialise plugin log\n");
-		return(0);
+		return (0);
 	}
 	log_write("xpCFY_TQ starting");
 	log_write("Plugin directory resolved to %s", plugin_directory());
@@ -132,21 +133,23 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 	{
 		log_write("Aircraft configuration file could not be created or opened");
 		log_shutdown();
-		return(0);
+		return (0);
 	}
 
 	/* set the config defaults and then read the configuration file */
 	plugin_config_defaults(&g_config);
-	if (!plugin_config_read(&g_config)) 
+	if (!plugin_config_read(&g_config))
 	{
 		log_write("Configuration missing; writing defaults");
 		if (!plugin_config_write(&g_config))
 		{
 			log_write("Unable to persist default plugin configuration; startup aborted");
 			log_shutdown();
-			return(0);
+			return (0);
 		}
 	}
+	TqControlsSetEnhancedTrimLogging(g_config.enhanced_logging);
+	TqControlsSetTrimMotorVariant(g_config.trim_motor_variant);
 
 	/* create and set the state table */
 	state = malloc(sizeof(state_table_t));
@@ -154,9 +157,9 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 	{
 		log_write("Unable to allocate memory for state table");
 		log_shutdown();
-		return(0);
+		return (0);
 	}
-	
+
 	/* set the initial flags */
 	state->blGblSimulatorRunning = false;
 	state->blFlightModelActive = false;
@@ -192,20 +195,20 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 
 	/* make sure the speedbrake is retracted and pulled down */
 	pokeys_set_speedbrake_closed_position(g_calibration.spoiler_min_position);
-	
+
 	if (g_calibration_required)
 		pokeys_set_throttle_test_limits(0, 0, 0, 0);
 	else
 		pokeys_set_throttle_test_limits(g_calibration.lever1_min_position, g_calibration.lever1_max_position, g_calibration.lever2_min_position, g_calibration.lever2_max_position);
 
 	/* and start the PoKeys worker thread */
-	if (!pokeys_thread_start(&g_config)) 
+	if (!pokeys_thread_start(&g_config))
 	{
 		log_write("Pokeys connection thread could not be started.");
 		free(state);
 		state = NULL;
 		log_shutdown();
-		return(0);
+		return (0);
 	}
 
 	XPLMRegisterFlightLoopCallback(UpdateFlightDetentState, 0.10f, NULL);
@@ -220,7 +223,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 		free(state);
 		state = NULL;
 		log_shutdown();
-		return(0);
+		return (0);
 	}
 	if (!calibration_window_initialise(&g_calibration))
 	{
@@ -232,7 +235,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 		free(state);
 		state = NULL;
 		log_shutdown();
-		return(0);
+		return (0);
 	}
 	if (!configuration_window_initialise(&g_config, &g_calibration))
 	{
@@ -245,20 +248,22 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 		free(state);
 		state = NULL;
 		log_shutdown();
-		return(0);
+		return (0);
 	}
-	if (g_calibration_required) calibration_window_begin(1);
+	if (g_calibration_required)
+		calibration_window_begin(1);
 
 	state->blGblSimulatorRunning = true;
 	g_started = 1;
 	g_enabled = 1;
 
-	return(1);
+	return (1);
 }
 
 PLUGIN_API void XPluginStop(void)
 {
-	if (!g_started) return;
+	if (!g_started)
+		return;
 
 	log_write("xpCFY_TQ plugin stopping.");
 	StopOperationalRuntime();
@@ -269,22 +274,25 @@ PLUGIN_API void XPluginStop(void)
 	g_started = 0;
 }
 
-PLUGIN_API void XPluginDisable(void) 
+PLUGIN_API void XPluginDisable(void)
 {
-	if (!g_started || !g_enabled) return;
+	if (!g_started || !g_enabled)
+		return;
 	log_write("xpCFY_TQ plugin disabled; stopping operational services");
 	StopOperationalRuntime();
 }
 
 PLUGIN_API int XPluginEnable(void)
 {
-	if (!g_started) return(0);
-	if (g_enabled) return(1);
+	if (!g_started)
+		return (0);
+	if (g_enabled)
+		return (1);
 
 	if (!pokeys_thread_start(&g_config))
 	{
 		log_write("Unable to restart PoKeys worker while enabling plugin");
-		return(0);
+		return (0);
 	}
 	XPLMRegisterFlightLoopCallback(UpdateFlightDetentState, 0.10f, NULL);
 	g_detent_callback_registered = 1;
@@ -293,7 +301,7 @@ PLUGIN_API int XPluginEnable(void)
 		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
 		g_detent_callback_registered = 0;
 		pokeys_thread_stop();
-		return(0);
+		return (0);
 	}
 	if (!calibration_window_initialise(&g_calibration))
 	{
@@ -301,7 +309,7 @@ PLUGIN_API int XPluginEnable(void)
 		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
 		g_detent_callback_registered = 0;
 		pokeys_thread_stop();
-		return(0);
+		return (0);
 	}
 	if (!configuration_window_initialise(&g_config, &g_calibration))
 	{
@@ -310,9 +318,10 @@ PLUGIN_API int XPluginEnable(void)
 		XPLMUnregisterFlightLoopCallback(UpdateFlightDetentState, NULL);
 		g_detent_callback_registered = 0;
 		pokeys_thread_stop();
-		return(0);
+		return (0);
 	}
-	if (g_calibration_required) calibration_window_begin(1);
+	if (g_calibration_required)
+		calibration_window_begin(1);
 	state->blGblSimulatorRunning = true;
 	state->blFlightModelActive = false;
 	state->blFlcbIsActive = false;
@@ -322,23 +331,23 @@ PLUGIN_API int XPluginEnable(void)
 	g_deferred_callback_registered = 1;
 	g_enabled = 1;
 	log_write("xpCFY_TQ plugin enabled; operational services restarted");
-	return(1);
+	return (1);
 }
 
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefcon)
 {
 	(void)from;
-	if (!g_started || !g_enabled || state == NULL) return;
+	if (!g_started || !g_enabled || state == NULL)
+		return;
 
 	/* Plane index zero is the user's aircraft; ignore AI aircraft messages. */
-	if ((inMsg == XPLM_MSG_PLANE_LOADED ||
-		inMsg == XPLM_MSG_PLANE_UNLOADED) && (intptr_t)inRefcon != 0)
+	if ((inMsg == XPLM_MSG_PLANE_LOADED || inMsg == XPLM_MSG_PLANE_UNLOADED) && (intptr_t)inRefcon != 0)
 		return;
 
 	/*   if a new aircraft is loaded, we need to re-initialise everything   */
 	if (inMsg == XPLM_MSG_PLANE_LOADED)
 	{
-		if (!state->blInitRunning)																	// only run if the initialisation routine is not doing anything
+		if (!state->blInitRunning) // only run if the initialisation routine is not doing anything
 		{
 			/*
 			 * stop using the preceding aircraft's dataref and command handles immediately.
@@ -356,7 +365,7 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefc
 			TqControlsDeactivate();
 			state->blFlightModelActive = false;
 			g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
-			state->blInitRunning = true;															// set the flag and ...
+			state->blInitRunning = true; // set the flag and ...
 			if (!g_deferred_callback_registered)
 			{
 				XPLMRegisterFlightLoopCallback(DeferredAircraftInitialisation, (float)0.10, (void*)state);
@@ -399,7 +408,8 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int inMsg, void* inRefc
  */
 static void StopOperationalRuntime(void)
 {
-	if (!g_enabled) return;
+	if (!g_enabled)
+		return;
 
 	ReleaseTqPushbuttonCommands((void*)state);
 	UnregisterTqTrimCommandHandlers();
@@ -450,7 +460,7 @@ float UpdateFlightDetentState(float elapsedMe, float elapsedSim, int counter, vo
 	if (state && state->blFlightModelActive && drOnGround)
 		in_flight = XPLMGetDatai(drOnGround) == 0;
 	pokeys_set_aircraft_in_flight(in_flight);
-	return(0.10f);
+	return (0.10f);
 }
 
 /*!
@@ -459,8 +469,8 @@ float UpdateFlightDetentState(float elapsedMe, float elapsedSim, int counter, vo
  */
 float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int counter, void* refcon)
 {
-	char acfDesc[50];																				// aircraft descriptiom
-	char* acfName = "Boeing 737-800X";																// default Zibo filename. anything else is probably Threshold LU
+	char acfDesc[50];				   // aircraft descriptiom
+	char* acfName = "Boeing 737-800X"; // default Zibo filename. anything else is probably Threshold LU
 
 	state_table_p state = (state_table_p)refcon;
 
@@ -470,26 +480,26 @@ float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int coun
 		pokeys_ensure_parking_brake_interlock_retracted();
 
 		if (!pokeys_parking_brake_interlock_is_retracted())
-			return(0.05f);
+			return (0.05f);
 
 		/* release is complete; First Run synchronization may now execute. */
 		state->blFlcbIsActive = true;
-		XPLMRegisterFlightLoopCallback(GetAircraftDataFLCB,	state->flcbUpdateRate, (void*)state);
+		XPLMRegisterFlightLoopCallback(GetAircraftDataFLCB, state->flcbUpdateRate, (void*)state);
 		state->blInitRunning = false;
 		g_deferred_init_stage = DEFER_INIT_VALIDATE_AIRCRAFT;
 		log_write("Parking-brake interlock retracted; aircraft data gatherer registered");
-		return(0);
+		return (0);
 	}
 
 	memset(acfDesc, 0, sizeof(acfDesc));
-	XPLMGetDatab(drAcfDescription, acfDesc, 0, (int)sizeof(acfDesc) - 1);							// preserve a trailing null
+	XPLMGetDatab(drAcfDescription, acfDesc, 0, (int)sizeof(acfDesc) - 1); // preserve a trailing null
 	log_write("Loaded ACF '%s'", acfDesc);
 
-	xPlaneVersion = XPLMGetDatai(drXplaneVersion) / 10000;											// extract the major version number
+	xPlaneVersion = XPLMGetDatai(drXplaneVersion) / 10000; // extract the major version number
 	if (xPlaneVersion == 12)
 	{
-		state->blFlightModelActive = CheckValidAcf(acfDesc, acfName);								// and check we've got a valid aircraft
-		if (state->blFlightModelActive)																// if the aircraft is valid then...
+		state->blFlightModelActive = CheckValidAcf(acfDesc, acfName); // and check we've got a valid aircraft
+		if (state->blFlightModelActive)								  // if the aircraft is valid then...
 		{
 			if (state->blFlcbIsActive)
 			{
@@ -501,8 +511,8 @@ float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int coun
 			TqControlsReset();
 
 			/* get dataref and command handles */
-			GetDataRefHandles();																	// load the dataref handles
-			GetCommandHandles();																	// load the command handles
+			GetDataRefHandles(); // load the dataref handles
+			GetCommandHandles(); // load the command handles
 
 			TqControlsSetAircraftActive(1);
 
@@ -514,7 +524,7 @@ float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int coun
 			pokeys_ensure_parking_brake_interlock_retracted();
 			g_deferred_init_stage = DEFER_INIT_WAIT_FOR_PARKING_BRAKE_RELEASE;
 			log_write("Aircraft initialisation waiting for parking-brake interlock release confirmation");
-			return(0.05f);
+			return (0.05f);
 		}
 		else
 		{
@@ -522,10 +532,10 @@ float DeferredAircraftInitialisation(float elapsedMe, float elapsedSim, int coun
 			TqControlsDeactivate();
 		}
 
-		state->blInitRunning = false;																// flag we've finished with the initialisation routines
+		state->blInitRunning = false; // flag we've finished with the initialisation routines
 	}
 	state->blInitRunning = false;
-	return(0);																						// and put the function to sleep (ie. don't call again until/unless we wake it)
+	return (0); // and put the function to sleep (ie. don't call again until/unless we wake it)
 }
 
 static int WaitForParkingBrakeInterlockRelease(DWORD timeout_ms)
@@ -533,12 +543,12 @@ static int WaitForParkingBrakeInterlockRelease(DWORD timeout_ms)
 	ULONGLONG deadline;
 
 	if (!pokeys_ensure_parking_brake_interlock_retracted())
-		return(0);
+		return (0);
 	deadline = GetTickCount64() + timeout_ms;
 	do
 	{
-		if (pokeys_parking_brake_interlock_is_retracted()) 
-			return(1);
+		if (pokeys_parking_brake_interlock_is_retracted())
+			return (1);
 		Sleep(10U);
 	} while (GetTickCount64() < deadline);
 	return (pokeys_parking_brake_interlock_is_retracted());
@@ -546,7 +556,7 @@ static int WaitForParkingBrakeInterlockRelease(DWORD timeout_ms)
 
 bool CheckValidAcf(char* acf_loaded, char* acf_compare)
 {
-	char tail_number[41] = { 0 };
+	char tail_number[41] = {0};
 	int returned_size;
 
 	returned_size = XPLMGetDatab(drAcfTailNum, tail_number, 0, sizeof(tail_number) - 1);
@@ -554,9 +564,9 @@ bool CheckValidAcf(char* acf_loaded, char* acf_compare)
 	if (returned_size <= 0 || !aircraft_config_contains_tail_number(tail_number))
 	{
 		log_write("Unsupported aircraft loaded - Tailnumber is \"%s\". Data services now in standby.", tail_number);
-		return(false);
+		return (false);
 	}
 
 	log_write("Valid aircraft loaded - Tailnumber is \"%s\". Aircraft description \"%s\"/\"%s\"", tail_number, acf_compare, acf_loaded);
-	return(true);
+	return (true);
 }

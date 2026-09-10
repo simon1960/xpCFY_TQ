@@ -153,6 +153,21 @@ It changes from conservative gain to full gain at 800 counts, adds the saved
 calibration value `trim_min_speed`, and limits output to 100%. A direction
 reversal retains its non-blocking 100 ms brake interval. Loss of an analogue
 sample stops and coasts the motor immediately.
+All published closed-loop targets are clamped to ADC 400..3695. The worker
+removes PWM immediately when the applied electrical direction reaches its
+corresponding endpoint; this check takes priority over progressive braking.
+The normal direction guard also prevents a new manual or closed-loop command
+from driving farther beyond either endpoint while still permitting movement
+back toward the protected range.
+
+The first accepted V3 First Run position uses a narrower central startup band of ADC 1059 through 3036,
+calculated as the 400..3695 operating midpoint plus or minus 30% of that span.
+The trim motor remains inhibited outside this band. Above 3036 the warning
+directs the user to switch off MAIN ELEC and rotate the wheel NOSE DOWN; below
+1059 it directs the user to rotate the wheel NOSE UP. The plugin confirms when
+the wheel enters the valid band and then resumes simulator-owned synchronisation.
+Once accepted, the check is latched for that synchronisation cycle and does not
+react to subsequent motor-driven travel outside the central band.
 
 Trim MAIN ELEC pin 7 and AUTOPILOT pin 9 are configured as plain digital inputs,
 matching original PoKeys mode `2`; they must not use the `0x80` inversion flag
@@ -269,6 +284,12 @@ during synchronisation. Normal manual/autopilot ownership resumes when wheel
 feedback is within the 50-count deadband. Battery power, pause, and trim-cutout
 safety conditions continue to inhibit motor power, leaving First Run pending
 until movement is safe.
+
+For a V3 TQ, First Run also remains pending while trim-wheel feedback is outside
+the central startup range of 1059..3036. A one-time directional warning requests
+manual repositioning with the MAIN ELEC cutout off. Motor commands stay disabled
+until the position is valid, when a confirmation is shown and synchronisation
+continues automatically.
 
 ## Speedbrake behavior
 

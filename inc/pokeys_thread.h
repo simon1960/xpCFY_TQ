@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: pokeys_thread.h                                                     */
-/*   VERSION: 1.0.4                                                                 */
+/*   VERSION: 1.0.5                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -17,12 +17,12 @@
 
 typedef struct PokeysStatus
 {
-	int			connected;
-	uint32_t	serial_number;
-	char		ip_address[16];
-	char		protocol[8];
-	char		firmware_version[32];
-	char		detail[128];
+	int connected;
+	uint32_t serial_number;
+	char ip_address[16];
+	char protocol[8];
+	char firmware_version[32];
+	char detail[128];
 } PokeysStatus;
 
 enum PokeysLeverIndex
@@ -39,59 +39,59 @@ enum PokeysLeverIndex
 
 typedef struct PokeysLeverPositions
 {
-	int			connected;
-	int			valid;
-	uint32_t	value[POKEYS_LEVER_COUNT];
-	uint64_t	sequence;
+	int connected;
+	int valid;
+	uint32_t value[POKEYS_LEVER_COUNT];
+	uint64_t sequence;
 } PokeysLeverPositions;
 
 /* coherent snapshot of the inverted parking-brake switch on PoKeys pin 0. */
 typedef struct PokeysParkingBrakeInput
 {
-	int			connected;
-	int			valid;
-	int			engaged;
-	uint64_t	sequence;
+	int connected;
+	int valid;
+	int engaged;
+	uint64_t sequence;
 } PokeysParkingBrakeInput;
 
 /* coherent snapshot of the inverted TO/GA buttons on PoKeys pins 1 and 2. */
 typedef struct PokeysTogaInputs
 {
-	int			connected;
-	int			valid;
-	int			left_pressed;
-	int			right_pressed;
-	uint64_t	sequence;
+	int connected;
+	int valid;
+	int left_pressed;
+	int right_pressed;
+	uint64_t sequence;
 } PokeysTogaInputs;
 
 /* coherent snapshot of the inverted A/T disconnect buttons on API pins 3/4. */
 typedef struct PokeysAtDisconnectInputs
 {
-	int			connected;
-	int			valid;
-	int			left_pressed;
-	int			right_pressed;
-	uint64_t	sequence;
+	int connected;
+	int valid;
+	int left_pressed;
+	int right_pressed;
+	uint64_t sequence;
 } PokeysAtDisconnectInputs;
 
 /* coherent snapshot of the inverted fuel-cutoff switches on API pins 5/6. */
 typedef struct PokeysFuelCutoffInputs
 {
-	int			connected;
-	int			valid;
-	int			left_cutoff;
-	int			right_cutoff;
-	uint64_t	sequence;
+	int connected;
+	int valid;
+	int left_cutoff;
+	int right_cutoff;
+	uint64_t sequence;
 } PokeysFuelCutoffInputs;
 
 /* persistent stabilizer-trim cutout switches on API pins 7 and 9. */
 typedef struct PokeysTrimCutoutInputs
 {
-	int			connected;
-	int			valid;
-	int			electric_normal;
-	int			autopilot_normal;
-	uint64_t	sequence;
+	int connected;
+	int valid;
+	int electric_normal;
+	int autopilot_normal;
+	uint64_t sequence;
 } PokeysTrimCutoutInputs;
 
 enum PokeysParkingBrakeState
@@ -110,6 +110,7 @@ void pokeys_get_status(PokeysStatus* status);
 void pokeys_set_network_protocol(int use_udp);
 /* Select V3 (3), V4 (4), or Pro (5); the worker safely reconnects. */
 void pokeys_set_trim_motor_variant(uint32_t variant);
+void pokeys_set_enhanced_logging(int enabled);
 void pokeys_get_lever_positions(PokeysLeverPositions* positions);
 void pokeys_get_parking_brake_input(PokeysParkingBrakeInput* input);
 void pokeys_get_toga_inputs(PokeysTogaInputs* inputs);
@@ -153,13 +154,10 @@ int pokeys_trim_motor_is_running(void);
  * and owns all PoKeys PWM/direction I/O; the X-Plane thread only supplies
  * targets and whether simulator-follow currently owns the levers.
  */
-void pokeys_set_throttle_follow_targets(uint32_t left_position,
-	uint32_t right_position, uint32_t left_min_speed,
-	uint32_t right_min_speed, int enabled);
+void pokeys_set_throttle_follow_targets(uint32_t left_position, uint32_t right_position, uint32_t left_min_speed, uint32_t right_min_speed, int enabled);
 /* Return and atomically clear bit 0=left / bit 1=right pilot intervention. */
 int pokeys_take_throttle_manual_override(void);
-void pokeys_set_throttle_test_limits(uint32_t left_min, uint32_t left_max,
-	uint32_t right_min, uint32_t right_max);
+void pokeys_set_throttle_test_limits(uint32_t left_min, uint32_t left_max, uint32_t right_min, uint32_t right_max);
 int pokeys_start_throttle_test(void);
 int pokeys_is_throttle_test_running(void);
 void pokeys_get_throttle_test_status(char* status, uint32_t status_size);

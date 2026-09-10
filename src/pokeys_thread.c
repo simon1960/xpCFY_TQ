@@ -1,6 +1,6 @@
 /**********************************************************************************/
 /* FILE NAME: pokeys_thread.c                                                     */
-/*   VERSION: 1.0.4                                                                 */
+/*   VERSION: 1.0.5                                                                 */
 /*      DATE: 27 AUG 2026                                                         */
 /*    AUTHOR: Simon Grainger                                                      */
 /*            Copyright © 2026 - S.W.Grainger                                     */
@@ -21,90 +21,93 @@
 #include "log.h"
 #include "plugin_paths.h"
 
-
 /* local variables */
-typedef int32_t								(*EnumerateUsbFn)(void);
-typedef int32_t								(*EnumerateNetworkFn)(sPoKeysNetworkDeviceSummary*, uint32_t);
-typedef sPoKeysDevice*						(*ConnectIndexFn)(uint32_t);
-typedef sPoKeysDevice*						(*ConnectNetworkFn)(sPoKeysNetworkDeviceSummary*);
-typedef void								(*DisconnectFn)(sPoKeysDevice*);
-typedef int32_t								(*DeviceDataGetFn)(sPoKeysDevice*);
-typedef int32_t								(*PinConfigurationFn)(sPoKeysDevice*);
-typedef int32_t								(*AnalogGetArrayFn)(sPoKeysDevice*, uint32_t*);
-typedef int32_t								(*DigitalIOFn)(sPoKeysDevice*);
-typedef int32_t								(*DigitalIOSetSingleFn)(sPoKeysDevice*, uint8_t, uint8_t);
-typedef int32_t								(*PWMConfigurationSetDirectlyFn)(sPoKeysDevice*, uint32_t, uint8_t*);
-typedef int32_t								(*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
+typedef int32_t (*EnumerateUsbFn)(void);
+typedef int32_t (*EnumerateNetworkFn)(sPoKeysNetworkDeviceSummary*, uint32_t);
+typedef sPoKeysDevice* (*ConnectIndexFn)(uint32_t);
+typedef sPoKeysDevice* (*ConnectNetworkFn)(sPoKeysNetworkDeviceSummary*);
+typedef void (*DisconnectFn)(sPoKeysDevice*);
+typedef int32_t (*DeviceDataGetFn)(sPoKeysDevice*);
+typedef int32_t (*PinConfigurationFn)(sPoKeysDevice*);
+typedef int32_t (*AnalogGetArrayFn)(sPoKeysDevice*, uint32_t*);
+typedef int32_t (*DigitalIOFn)(sPoKeysDevice*);
+typedef int32_t (*DigitalIOSetSingleFn)(sPoKeysDevice*, uint8_t, uint8_t);
+typedef int32_t (*PWMConfigurationSetDirectlyFn)(sPoKeysDevice*, uint32_t, uint8_t*);
+typedef int32_t (*PWMUpdateDirectlyFn)(sPoKeysDevice*, uint32_t*);
 
-#define SPEEDBRAKE_FLIGHT_DETENT_PIN		30U
-#define SPEEDBRAKE_DIRECTION_PIN			25U
-#define SPEEDBRAKE_ENABLE_PIN				26U
-#define POKEYS_PWM_CHANNELS					6U
-#define POKEYS_PWM_PERIOD					500000U
-#define SPEEDBRAKE_PWM_CHANNEL				3U
-#define SPEEDBRAKE_RETRACT_DUTY				350000U
-#define SPEEDBRAKE_EXTEND_DUTY				400000U
-#define SPEEDBRAKE_RUN_TIME_MS				2000U
-#define PARKING_BRAKE_PWM_CHANNEL			0U
-#define PARKING_BRAKE_RELEASE_DUTY			34000U
-#define PARKING_BRAKE_SET_DUTY				43000U
-#define PARKING_BRAKE_PULSE_MS				500U
-#define PARKING_BRAKE_SWITCH_PIN			0U
-#define LEFT_TOGA_SWITCH_PIN				1U
-#define RIGHT_TOGA_SWITCH_PIN				2U
-#define LEFT_AT_DISCONNECT_SWITCH_PIN		3U
-#define RIGHT_AT_DISCONNECT_SWITCH_PIN		4U
-#define LEFT_FUEL_CUTOFF_SWITCH_PIN			5U
-#define RIGHT_FUEL_CUTOFF_SWITCH_PIN		6U
-#define ELECTRIC_TRIM_NORMAL_SWITCH_PIN		7U
-#define AUTOPILOT_TRIM_NORMAL_SWITCH_PIN	9U
-#define BACKLIGHT_PIN						10U
-#define PARKING_BRAKE_INDICATOR_PIN			11U
-#define TRIM_DIRECTION_A_PIN				27U
-#define TRIM_ENABLE_PIN						28U
-#define TRIM_DIRECTION_B_PIN				31U
-#define TRIM_INDICATOR_PWM_CHANNEL			1U
-#define TRIM_MOTOR_PWM_CHANNEL				2U
-#define TRIM_POSITION_MIN					400U
-#define TRIM_POSITION_MAX					3695U
-#define TRIM_POSITION_DEADBAND				50L
-#define TRIM_CONSERVATIVE_RANGE				800L
-#define TRIM_DIRECTION_BRAKE_MS				100U
-#define TRIM_START_RAMP_STEP_MS				50U
-#define TRIM_START_RAMP_STEP_DUTY			25000U
-#define TRIM_BRAKE_RAMP_STEP_MS				50U
-#define TRIM_BRAKE_RAMP_STEP_DUTY			25000U
-#define TRIM_FEEDBACK_SAMPLES				12U
-#define SPEEDBRAKE_CLOSED_TOLERANCE			75U
-#define THROTTLE_LEFT_DIRECTION_PIN			22U
-#define THROTTLE_RIGHT_DIRECTION_PIN		23U
-#define THROTTLE_LEFT_ENABLE_PIN			24U
-#define THROTTLE_RIGHT_ENABLE_PIN			29U
-#define THROTTLE_LEFT_PWM_CHANNEL			5U
-#define THROTTLE_RIGHT_PWM_CHANNEL			4U
-#define THROTTLE_MEDIUM_DUTY				175000U
-#define THROTTLE_FAST_DUTY					250000U
-#define THROTTLE_ENDPOINT_TOLERANCE			50U
-#define THROTTLE_LEG_TIMEOUT_MS				15000U
-#define POKEYS_CONTROL_INTERVAL_MS			10U
-#define POKEYS_HEALTH_INTERVAL_CYCLES		100U
-#define THROTTLE_FOLLOW_START_DEADBAND		40L
-#define THROTTLE_FOLLOW_STOP_DEADBAND		16L
-#define THROTTLE_FOLLOW_REVERSE_DEADBAND	80L
-#define THROTTLE_CONSERVATIVE_RANGE			1000L
-#define THROTTLE_MEDIUM_RANGE				1600L
-#define THROTTLE_MAX_SPEED_PERCENT			50L
-#define THROTTLE_SYNC_TARGET_TOLERANCE		0.025f
-#define THROTTLE_SYNC_GAIN					320.0f
-#define THROTTLE_SYNC_MAX_CORRECTION		16L
-#define THROTTLE_SYNC_POSITION_DEADBAND		(12.0f / 4095.0f)
-#define THROTTLE_SYNC_FILTER_ALPHA			0.20f
-#define THROTTLE_SYNC_FILTER_SETTLED			0.05f
-#define THROTTLE_MANUAL_ERROR_COUNTS		65L
-#define THROTTLE_MANUAL_ERROR_SAMPLES		6
-#define THROTTLE_MANUAL_DRIVE_GRACE_MS		1500U
-#define THROTTLE_MANUAL_COAST_GRACE_MS		1000U
-#define THROTTLE_MANUAL_MIN_DUTY			37500U
+#define SPEEDBRAKE_FLIGHT_DETENT_PIN 30U
+#define SPEEDBRAKE_DIRECTION_PIN 25U
+#define SPEEDBRAKE_ENABLE_PIN 26U
+#define POKEYS_PWM_CHANNELS 6U
+#define POKEYS_PWM_REFERENCE_CLOCK 25000000U
+#define POKEYS_PWM_REFERENCE_PERIOD 500000U
+#define POKEYS_PWM_LEGACY_CLOCK 12000000U
+#define SPEEDBRAKE_PWM_CHANNEL 3U
+#define SPEEDBRAKE_RETRACT_DUTY 350000U
+#define SPEEDBRAKE_EXTEND_DUTY 400000U
+#define SPEEDBRAKE_RUN_TIME_MS 2000U
+#define PARKING_BRAKE_PWM_CHANNEL 0U
+#define PARKING_BRAKE_RELEASE_DUTY 34000U
+#define PARKING_BRAKE_SET_DUTY 43000U
+#define PARKING_BRAKE_PULSE_MS 500U
+#define PARKING_BRAKE_SWITCH_PIN 0U
+#define LEFT_TOGA_SWITCH_PIN 1U
+#define RIGHT_TOGA_SWITCH_PIN 2U
+#define LEFT_AT_DISCONNECT_SWITCH_PIN 3U
+#define RIGHT_AT_DISCONNECT_SWITCH_PIN 4U
+#define LEFT_FUEL_CUTOFF_SWITCH_PIN 5U
+#define RIGHT_FUEL_CUTOFF_SWITCH_PIN 6U
+#define ELECTRIC_TRIM_NORMAL_SWITCH_PIN 7U
+#define AUTOPILOT_TRIM_NORMAL_SWITCH_PIN 9U
+#define BACKLIGHT_PIN 10U
+#define PARKING_BRAKE_INDICATOR_PIN 11U
+#define TRIM_DIRECTION_A_PIN 27U
+#define TRIM_ENABLE_PIN 28U
+#define TRIM_DIRECTION_B_PIN 31U
+#define TRIM_INDICATOR_PWM_CHANNEL 1U
+#define TRIM_MOTOR_PWM_CHANNEL 2U
+#define TRIM_POSITION_MIN 400U
+#define TRIM_POSITION_MAX 3695U
+#define TRIM_POSITION_DEADBAND 50L
+#define TRIM_CONSERVATIVE_RANGE 800L
+#define TRIM_DIRECTION_BRAKE_MS 100U
+#define TRIM_START_RAMP_STEP_MS 50U
+#define TRIM_START_RAMP_STEP_DUTY 25000U
+#define TRIM_BRAKE_RAMP_STEP_MS 50U
+#define TRIM_BRAKE_RAMP_STEP_DUTY 25000U
+#define TRIM_FEEDBACK_SAMPLES 12U
+#define TRIM_TRACE_ADC_HYSTERESIS 20U
+#define TRIM_TRACE_PWM_HYSTERESIS 100U
+#define SPEEDBRAKE_CLOSED_TOLERANCE 75U
+#define THROTTLE_LEFT_DIRECTION_PIN 22U
+#define THROTTLE_RIGHT_DIRECTION_PIN 23U
+#define THROTTLE_LEFT_ENABLE_PIN 24U
+#define THROTTLE_RIGHT_ENABLE_PIN 29U
+#define THROTTLE_LEFT_PWM_CHANNEL 5U
+#define THROTTLE_RIGHT_PWM_CHANNEL 4U
+#define THROTTLE_MEDIUM_DUTY 175000U
+#define THROTTLE_FAST_DUTY 250000U
+#define THROTTLE_ENDPOINT_TOLERANCE 50U
+#define THROTTLE_LEG_TIMEOUT_MS 15000U
+#define POKEYS_CONTROL_INTERVAL_MS 10U
+#define POKEYS_HEALTH_INTERVAL_CYCLES 100U
+#define THROTTLE_FOLLOW_START_DEADBAND 40L
+#define THROTTLE_FOLLOW_STOP_DEADBAND 16L
+#define THROTTLE_FOLLOW_REVERSE_DEADBAND 80L
+#define THROTTLE_CONSERVATIVE_RANGE 1000L
+#define THROTTLE_MEDIUM_RANGE 1600L
+#define THROTTLE_MAX_SPEED_PERCENT 50L
+#define THROTTLE_SYNC_TARGET_TOLERANCE 0.025f
+#define THROTTLE_SYNC_GAIN 320.0f
+#define THROTTLE_SYNC_MAX_CORRECTION 16L
+#define THROTTLE_SYNC_POSITION_DEADBAND (12.0f / 4095.0f)
+#define THROTTLE_SYNC_FILTER_ALPHA 0.20f
+#define THROTTLE_SYNC_FILTER_SETTLED 0.05f
+#define THROTTLE_MANUAL_ERROR_COUNTS 65L
+#define THROTTLE_MANUAL_ERROR_SAMPLES 6
+#define THROTTLE_MANUAL_DRIVE_GRACE_MS 1500U
+#define THROTTLE_MANUAL_COAST_GRACE_MS 1000U
+#define THROTTLE_MANUAL_MIN_DUTY 37500U
 
 enum SpeedbrakeCommand
 {
@@ -138,10 +141,31 @@ enum ThrottleTestStage
 static HANDLE g_stop_event;
 static HANDLE g_thread;
 static PluginConfig g_config;
+static uint32_t g_pwm_period = POKEYS_PWM_REFERENCE_PERIOD;
 static volatile LONG g_network_use_udp;
 static volatile LONG g_network_protocol_change_requested;
 static volatile LONG g_trim_motor_variant_requested;
 static volatile LONG g_trim_motor_variant_change_requested;
+static volatile LONG g_enhanced_logging;
+static volatile LONG g_trim_trace_generation;
+#define TRIM_TRACE(...)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+	do                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \
+	{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \
+		if (InterlockedCompareExchange(&g_enhanced_logging, 0, 0) != 0)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+		{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+			static char trim_trace_previous[2048];                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             \
+			static LONG trim_trace_previous_generation;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+			char trim_trace_current[2048];                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     \
+			LONG trim_trace_generation = InterlockedCompareExchange(&g_trim_trace_generation, 0, 0);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \
+			int trim_trace_count = snprintf(trim_trace_current, sizeof(trim_trace_current), __VA_ARGS__);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+			if (trim_trace_count >= 0 && (trim_trace_previous_generation != trim_trace_generation || strcmp(trim_trace_previous, trim_trace_current) != 0))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    \
+			{                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+				strcpy_s(trim_trace_previous, sizeof(trim_trace_previous), trim_trace_current);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \
+				trim_trace_previous_generation = trim_trace_generation;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \
+				log_write("TRIM TRACE: %s", trim_trace_current);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               \
+			}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \
+		}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \
+	} while (0)
 static volatile LONG g_connected;
 static SRWLOCK g_status_lock = SRWLOCK_INIT;
 static PokeysStatus g_status;
@@ -208,21 +232,21 @@ static char g_throttle_test_status[128] = "Throttle test ready";
 /* pokeys data structure */
 typedef struct PokeysApi
 {
-	HMODULE							module;
-	EnumerateUsbFn					enumerate_usb;
-	EnumerateNetworkFn				enumerate_network;
-	ConnectIndexFn					connect_index;
-	ConnectNetworkFn				connect_network;
-	DisconnectFn					disconnect;
-	DeviceDataGetFn					device_data_get;
-	PinConfigurationFn				pin_configuration_get;
-	PinConfigurationFn				pin_configuration_set;
-	AnalogGetArrayFn				analog_get_array;
-	DigitalIOFn					digital_io_set;
-	DigitalIOFn					digital_io_get;
-	DigitalIOSetSingleFn			digital_io_set_single;
-	PWMConfigurationSetDirectlyFn	pwm_configuration_set_directly;
-	PWMUpdateDirectlyFn				pwm_update_directly;
+	HMODULE module;
+	EnumerateUsbFn enumerate_usb;
+	EnumerateNetworkFn enumerate_network;
+	ConnectIndexFn connect_index;
+	ConnectNetworkFn connect_network;
+	DisconnectFn disconnect;
+	DeviceDataGetFn device_data_get;
+	PinConfigurationFn pin_configuration_get;
+	PinConfigurationFn pin_configuration_set;
+	AnalogGetArrayFn analog_get_array;
+	DigitalIOFn digital_io_set;
+	DigitalIOFn digital_io_get;
+	DigitalIOSetSingleFn digital_io_set_single;
+	PWMConfigurationSetDirectlyFn pwm_configuration_set_directly;
+	PWMUpdateDirectlyFn pwm_update_directly;
 } PokeysApi;
 
 /*
@@ -237,6 +261,36 @@ typedef struct MinMaxFeedbackFilter
 	uint32_t next;
 	int initialised;
 } MinMaxFeedbackFilter;
+
+/*
+ * Enhanced logging must not turn normal ADC noise into thousands of apparent
+ * state changes. Each trace channel therefore retains its last reported value
+ * until the new sample differs by the configured hysteresis. The trace
+ * generation invalidates retained values when enhanced logging is enabled or
+ * a new PoKeys worker is started, ensuring that the first current value is
+ * always reported.
+ */
+typedef struct TrimTraceHysteresis
+{
+	uint32_t reported;
+	LONG generation;
+	int initialised;
+} TrimTraceHysteresis;
+
+static int trim_trace_hysteresis_update(TrimTraceHysteresis* state, uint32_t sample, uint32_t threshold, uint32_t* reported)
+{
+	LONG generation = InterlockedCompareExchange(&g_trim_trace_generation, 0, 0);
+	uint32_t difference = sample >= state->reported ? sample - state->reported : state->reported - sample;
+	int changed = !state->initialised || state->generation != generation || difference >= threshold;
+	if (changed)
+	{
+		state->reported = sample;
+		state->generation = generation;
+		state->initialised = 1;
+	}
+	*reported = state->reported;
+	return (changed);
+}
 
 /*
  * Worker-owned state used to distinguish pilot intervention from normal motor
@@ -278,11 +332,11 @@ static uint32_t minmax_feedback_filter_add(MinMaxFeedbackFilter* filter, uint32_
 	uint64_t total = 0U;
 	uint32_t i;
 
-	if (!filter->initialised) 
+	if (!filter->initialised)
 	{
 		for (i = 0U; i < TRIM_FEEDBACK_SAMPLES; ++i)
 			filter->samples[i] = sample;
-	
+
 		filter->initialised = 1;
 	}
 	else
@@ -292,12 +346,12 @@ static uint32_t minmax_feedback_filter_add(MinMaxFeedbackFilter* filter, uint32_
 	}
 
 	memcpy(sorted, filter->samples, sizeof(sorted));
-	for (i = 1U; i < TRIM_FEEDBACK_SAMPLES; ++i) 
+	for (i = 1U; i < TRIM_FEEDBACK_SAMPLES; ++i)
 	{
 		uint32_t value = sorted[i];
 		uint32_t j = i;
 
-		while (j > 0U && sorted[j - 1U] > value) 
+		while (j > 0U && sorted[j - 1U] > value)
 		{
 			sorted[j] = sorted[j - 1U];
 			--j;
@@ -307,12 +361,12 @@ static uint32_t minmax_feedback_filter_add(MinMaxFeedbackFilter* filter, uint32_
 	for (i = 1U; i < TRIM_FEEDBACK_SAMPLES - 1U; ++i)
 		total += sorted[i];
 
-	return((uint32_t)(total / (TRIM_FEEDBACK_SAMPLES - 2U)));
+	return ((uint32_t)(total / (TRIM_FEEDBACK_SAMPLES - 2U)));
 }
 
 static int flight_detent_should_be_retracted(void)
 {
-	return(InterlockedCompareExchange(&g_calibration_active, 0, 0) != 0 || InterlockedCompareExchange(&g_speedbrake_detent_override, 0, 0) != 0 || InterlockedCompareExchange(&g_aircraft_in_flight, 0, 0) == 0);
+	return (InterlockedCompareExchange(&g_calibration_active, 0, 0) != 0 || InterlockedCompareExchange(&g_speedbrake_detent_override, 0, 0) != 0 || InterlockedCompareExchange(&g_aircraft_in_flight, 0, 0) == 0);
 }
 
 static int set_logical_output(PokeysApi* api, sPoKeysDevice* device, uint8_t pin, int state)
@@ -321,7 +375,7 @@ static int set_logical_output(PokeysApi* api, sPoKeysDevice* device, uint8_t pin
 
 	/* PoKeysDevice.SetOutput uses active-low values on this TQ. */
 	device->Pins[pin].DigitalValueSet = electrical_state;
-	return(api->digital_io_set_single(device, pin, electrical_state) == PK_OK);
+	return (api->digital_io_set_single(device, pin, electrical_state) == PK_OK);
 }
 
 /*
@@ -331,20 +385,15 @@ static int set_logical_output(PokeysApi* api, sPoKeysDevice* device, uint8_t pin
  * Keeping each DigitalValueSet cache current also makes the bulk update safe
  * for the other configured outputs.
  */
-static int set_throttle_bridge_outputs(PokeysApi* api,
-	sPoKeysDevice* device, int left_direction, int right_direction)
+static int set_throttle_bridge_outputs(PokeysApi* api, sPoKeysDevice* device, int left_direction, int right_direction)
 {
 	if (left_direction != 2)
-		device->Pins[THROTTLE_LEFT_DIRECTION_PIN].DigitalValueSet =
-			(uint8_t)(left_direction ? 0U : 1U);
+		device->Pins[THROTTLE_LEFT_DIRECTION_PIN].DigitalValueSet = (uint8_t)(left_direction ? 0U : 1U);
 	if (right_direction != 2)
-		device->Pins[THROTTLE_RIGHT_DIRECTION_PIN].DigitalValueSet =
-			(uint8_t)(right_direction ? 0U : 1U);
-	device->Pins[THROTTLE_LEFT_ENABLE_PIN].DigitalValueSet =
-		(uint8_t)(left_direction != 2 ? 0U : 1U);
-	device->Pins[THROTTLE_RIGHT_ENABLE_PIN].DigitalValueSet =
-		(uint8_t)(right_direction != 2 ? 0U : 1U);
-	return(api->digital_io_set(device) == PK_OK);
+		device->Pins[THROTTLE_RIGHT_DIRECTION_PIN].DigitalValueSet = (uint8_t)(right_direction ? 0U : 1U);
+	device->Pins[THROTTLE_LEFT_ENABLE_PIN].DigitalValueSet = (uint8_t)(left_direction != 2 ? 0U : 1U);
+	device->Pins[THROTTLE_RIGHT_ENABLE_PIN].DigitalValueSet = (uint8_t)(right_direction != 2 ? 0U : 1U);
+	return (api->digital_io_set(device) == PK_OK);
 }
 
 /*
@@ -354,7 +403,7 @@ static int set_throttle_bridge_outputs(PokeysApi* api,
  */
 static int set_parking_brake_indicator_output(PokeysApi* api, sPoKeysDevice* device, int illuminated)
 {
-	return(set_logical_output(api, device, PARKING_BRAKE_INDICATOR_PIN, illuminated));
+	return (set_logical_output(api, device, PARKING_BRAKE_INDICATOR_PIN, illuminated));
 }
 
 /*
@@ -382,15 +431,15 @@ static int apply_flight_detent_state(PokeysApi* api, sPoKeysDevice* device, int 
 	int requested = InterlockedExchange(&g_detent_update_requested, 0) != 0;
 	int32_t result;
 
-	if (!force && !requested && applied_state == retract) return (1);
+	if (!force && !requested && applied_state == retract)
+		return (1);
 	/*
 	 * The CFY wiring and the original PoKeys .NET SetOutput implementation
 	 * use active-low logic: logical TRUE (release/retract) is transmitted as
 	 * zero, while logical FALSE (engage) is transmitted as one.
 	 */
-	result = set_logical_output(api, device, SPEEDBRAKE_FLIGHT_DETENT_PIN,
-		retract) ? PK_OK : PK_ERR_GENERIC;
-	if (result != PK_OK) 
+	result = set_logical_output(api, device, SPEEDBRAKE_FLIGHT_DETENT_PIN, retract) ? PK_OK : PK_ERR_GENERIC;
+	if (result != PK_OK)
 	{
 		InterlockedExchange(&g_detent_retracted, 0);
 		InterlockedExchange(&g_detent_update_requested, 1);
@@ -399,7 +448,7 @@ static int apply_flight_detent_state(PokeysApi* api, sPoKeysDevice* device, int 
 			log_write("Unable to %s speedbrake flight-detent lock on pin %u (result %ld)", retract ? "retract" : "engage", SPEEDBRAKE_FLIGHT_DETENT_PIN, (long)result);
 			failure_logged = 1;
 		}
-		return(0);
+		return (0);
 	}
 
 	failure_logged = 0;
@@ -407,7 +456,7 @@ static int apply_flight_detent_state(PokeysApi* api, sPoKeysDevice* device, int 
 		log_write("Speedbrake flight-detent lock %s", retract ? "retracted" : "engaged for flight");
 	applied_state = retract;
 	InterlockedExchange(&g_detent_retracted, retract ? 1 : 0);
-	return(1);
+	return (1);
 }
 
 static void levers_set_disconnected(void)
@@ -430,18 +479,29 @@ static void levers_set_unavailable(void)
 
 static void levers_update(const uint32_t* raw)
 {
+	static TrimTraceHysteresis raw_trim_trace;
+	static TrimTraceHysteresis inverted_trim_trace;
+	uint32_t raw_trim = raw[3] > 4095U ? 4095U : raw[3];
+	uint32_t inverted_trim = 4095U - raw_trim;
+	uint32_t trace_raw_trim;
+	uint32_t trace_inverted_trim;
+	(void)trim_trace_hysteresis_update(&raw_trim_trace, raw_trim, TRIM_TRACE_ADC_HYSTERESIS, &trace_raw_trim);
+	(void)trim_trace_hysteresis_update(&inverted_trim_trace, inverted_trim, TRIM_TRACE_ADC_HYSTERESIS, &trace_inverted_trim);
+	TRIM_TRACE("ENTER levers_update raw_trim_adc=%u inverted_trim_adc=%u", trace_raw_trim, trace_inverted_trim);
 	AcquireSRWLockExclusive(&g_lever_lock);
 	g_levers.connected = 1;
 	g_levers.valid = 1;
 	g_levers.value[POKEYS_LEVER_THROTTLE_1] = 4095U - (raw[0] > 4095U ? 4095U : raw[0]);
 	g_levers.value[POKEYS_LEVER_THROTTLE_2] = 4095U - (raw[1] > 4095U ? 4095U : raw[1]);
 	g_levers.value[POKEYS_LEVER_SPEED_BRAKE] = 4095U - (raw[2] > 4095U ? 4095U : raw[2]);
-	g_levers.value[POKEYS_LEVER_TRIM] = 4095U - (raw[3] > 4095U ? 4095U : raw[3]);
+	g_levers.value[POKEYS_LEVER_TRIM] = inverted_trim;
 	g_levers.value[POKEYS_LEVER_REVERSER_1] = raw[4] > 4095U ? 4095U : raw[4];
 	g_levers.value[POKEYS_LEVER_REVERSER_2] = raw[5] > 4095U ? 4095U : raw[5];
 	g_levers.value[POKEYS_LEVER_FLAPS] = raw[6] > 4095U ? 4095U : raw[6];
 	++g_levers.sequence;
+	TRIM_TRACE("levers_update trim_position=%u connected=%d valid=%d", trace_inverted_trim, g_levers.connected, g_levers.valid);
 	ReleaseSRWLockExclusive(&g_lever_lock);
+	TRIM_TRACE("EXIT levers_update");
 }
 
 static void parking_brake_input_set_disconnected(void)
@@ -466,8 +526,8 @@ static void parking_brake_input_update(int engaged)
 {
 	AcquireSRWLockExclusive(&g_parking_brake_input_lock);
 	g_parking_brake_input.connected = 1;
-	if (!g_parking_brake_input.valid ||
-		g_parking_brake_input.engaged != (engaged != 0)) {
+	if (!g_parking_brake_input.valid || g_parking_brake_input.engaged != (engaged != 0))
+	{
 		g_parking_brake_input.engaged = engaged != 0;
 		++g_parking_brake_input.sequence;
 	}
@@ -544,9 +604,8 @@ static void at_disconnect_inputs_update(int left_pressed, int right_pressed)
 	right_pressed = right_pressed != 0;
 	AcquireSRWLockExclusive(&g_at_disconnect_input_lock);
 	g_at_disconnect_inputs.connected = 1;
-	if (!g_at_disconnect_inputs.valid ||
-		g_at_disconnect_inputs.left_pressed != left_pressed ||
-		g_at_disconnect_inputs.right_pressed != right_pressed) {
+	if (!g_at_disconnect_inputs.valid || g_at_disconnect_inputs.left_pressed != left_pressed || g_at_disconnect_inputs.right_pressed != right_pressed)
+	{
 		g_at_disconnect_inputs.left_pressed = left_pressed;
 		g_at_disconnect_inputs.right_pressed = right_pressed;
 		++g_at_disconnect_inputs.sequence;
@@ -581,9 +640,8 @@ static void fuel_cutoff_inputs_update(int left_cutoff, int right_cutoff)
 	right_cutoff = right_cutoff != 0;
 	AcquireSRWLockExclusive(&g_fuel_cutoff_input_lock);
 	g_fuel_cutoff_inputs.connected = 1;
-	if (!g_fuel_cutoff_inputs.valid ||
-		g_fuel_cutoff_inputs.left_cutoff != left_cutoff ||
-		g_fuel_cutoff_inputs.right_cutoff != right_cutoff) {
+	if (!g_fuel_cutoff_inputs.valid || g_fuel_cutoff_inputs.left_cutoff != left_cutoff || g_fuel_cutoff_inputs.right_cutoff != right_cutoff)
+	{
 		g_fuel_cutoff_inputs.left_cutoff = left_cutoff;
 		g_fuel_cutoff_inputs.right_cutoff = right_cutoff;
 		++g_fuel_cutoff_inputs.sequence;
@@ -594,38 +652,44 @@ static void fuel_cutoff_inputs_update(int left_cutoff, int right_cutoff)
 
 static void trim_cutout_inputs_set_disconnected(void)
 {
+	TRIM_TRACE("ENTER trim_cutout_inputs_set_disconnected");
 	AcquireSRWLockExclusive(&g_trim_cutout_input_lock);
 	g_trim_cutout_inputs.connected = 0;
 	g_trim_cutout_inputs.valid = 0;
 	++g_trim_cutout_inputs.sequence;
 	ReleaseSRWLockExclusive(&g_trim_cutout_input_lock);
+	TRIM_TRACE("EXIT trim_cutout_inputs_set_disconnected sequence=%llu", (unsigned long long)g_trim_cutout_inputs.sequence);
 }
 
 static void trim_cutout_inputs_set_unavailable(void)
 {
+	TRIM_TRACE("ENTER trim_cutout_inputs_set_unavailable");
 	AcquireSRWLockExclusive(&g_trim_cutout_input_lock);
 	g_trim_cutout_inputs.connected = 1;
 	g_trim_cutout_inputs.valid = 0;
 	++g_trim_cutout_inputs.sequence;
 	ReleaseSRWLockExclusive(&g_trim_cutout_input_lock);
+	TRIM_TRACE("EXIT trim_cutout_inputs_set_unavailable sequence=%llu", (unsigned long long)g_trim_cutout_inputs.sequence);
 }
 
 /* Publish both maintained trim switches as one coherent first-run snapshot. */
-static void trim_cutout_inputs_update(int electric_normal,
-	int autopilot_normal)
+static void trim_cutout_inputs_update(int electric_normal, int autopilot_normal)
 {
+	TRIM_TRACE("ENTER trim_cutout_inputs_update raw_electric_normal=%d raw_autopilot_normal=%d", electric_normal, autopilot_normal);
 	electric_normal = electric_normal != 0;
 	autopilot_normal = autopilot_normal != 0;
 	AcquireSRWLockExclusive(&g_trim_cutout_input_lock);
 	g_trim_cutout_inputs.connected = 1;
-	if (!g_trim_cutout_inputs.valid || g_trim_cutout_inputs.electric_normal != electric_normal || g_trim_cutout_inputs.autopilot_normal != autopilot_normal) 
+	if (!g_trim_cutout_inputs.valid || g_trim_cutout_inputs.electric_normal != electric_normal || g_trim_cutout_inputs.autopilot_normal != autopilot_normal)
 	{
 		g_trim_cutout_inputs.electric_normal = electric_normal;
 		g_trim_cutout_inputs.autopilot_normal = autopilot_normal;
 		++g_trim_cutout_inputs.sequence;
 	}
 	g_trim_cutout_inputs.valid = 1;
+	TRIM_TRACE("trim cutout stored electric_normal=%d autopilot_normal=%d sequence=%llu connected=%d valid=%d", g_trim_cutout_inputs.electric_normal, g_trim_cutout_inputs.autopilot_normal, (unsigned long long)g_trim_cutout_inputs.sequence, g_trim_cutout_inputs.connected, g_trim_cutout_inputs.valid);
 	ReleaseSRWLockExclusive(&g_trim_cutout_input_lock);
+	TRIM_TRACE("EXIT trim_cutout_inputs_update");
 }
 
 static void status_set_disconnected(const char* detail)
@@ -660,7 +724,8 @@ static void status_set_connected(const sPoKeysDevice* device, const char* ip_add
 static FARPROC api_proc(HMODULE module, const char* name)
 {
 	FARPROC result = GetProcAddress(module, name);
-	if (!result) log_write("PoKeyslib.dll does not export %s (error %lu)", name, GetLastError());
+	if (!result)
+		log_write("PoKeyslib.dll does not export %s (error %lu)", name, GetLastError());
 	return result;
 }
 
@@ -680,15 +745,14 @@ static int api_load(PokeysApi* api, char* error_detail, size_t error_detail_size
 
 	api->module = LoadLibraryA(path);
 
-	if (!api->module) 
+	if (!api->module)
 	{
 		DWORD error = GetLastError();
 		log_write("Unable to load %s (error %lu)", path, error);
-		snprintf(error_detail, error_detail_size,
-			"PoKeyslib.dll load failed (Windows error %lu)", error);
-		return(0);
+		snprintf(error_detail, error_detail_size, "PoKeyslib.dll load failed (Windows error %lu)", error);
+		return (0);
 	}
-	
+
 	api->enumerate_usb = (EnumerateUsbFn)api_proc(api->module, "PK_EnumerateUSBDevices");
 	api->enumerate_network = (EnumerateNetworkFn)api_proc(api->module, "PK_EnumerateNetworkDevices");
 	api->connect_index = (ConnectIndexFn)api_proc(api->module, "PK_ConnectToDevice");
@@ -708,25 +772,26 @@ static int api_load(PokeysApi* api, char* error_detail, size_t error_detail_size
 		FreeLibrary(api->module);
 		memset(api, 0, sizeof(*api));
 		strcpy_s(error_detail, error_detail_size, "PoKeyslib.dll has missing API exports");
-		return(0);
+		return (0);
 	}
 	return (1);
 }
 
 static int configure_actuator_outputs(PokeysApi* api, sPoKeysDevice* device)
 {
-	uint8_t enabled_channels[POKEYS_PWM_CHANNELS] = { 1U, 1U, 1U, 1U, 1U, 1U };
-	uint32_t duty_cycles[POKEYS_PWM_CHANNELS] = { 0U };
+	uint8_t enabled_channels[POKEYS_PWM_CHANNELS] = {1U, 1U, 1U, 1U, 1U, 1U};
+	uint32_t duty_cycles[POKEYS_PWM_CHANNELS] = {0U};
+	uint32_t pwm_clock;
 
-	if (!device->Pins || device->info.iPinCount <= TRIM_DIRECTION_B_PIN) 
+	if (!device->Pins || device->info.iPinCount <= TRIM_DIRECTION_B_PIN)
 	{
 		log_write("PoKeys serial %u does not expose required actuator pin %u", device->DeviceData.SerialNumber, TRIM_DIRECTION_B_PIN);
-		return(0);
+		return (0);
 	}
-	if (api->pin_configuration_get(device) != PK_OK) 
+	if (api->pin_configuration_get(device) != PK_OK)
 	{
 		log_write("Unable to read PoKeys pin configuration for TQ actuators");
-		return(0);
+		return (0);
 	}
 	device->Pins[SPEEDBRAKE_DIRECTION_PIN].PinFunction = PK_PinCap_digitalOutput;
 	device->Pins[SPEEDBRAKE_ENABLE_PIN].PinFunction = PK_PinCap_digitalOutput;
@@ -752,50 +817,64 @@ static int configure_actuator_outputs(PokeysApi* api, sPoKeysDevice* device)
 	 * 130 (digital input plus inversion). Hardware NORMAL therefore maps
 	 * directly to a non-zero PoKeys value.
 	 */
-	device->Pins[ELECTRIC_TRIM_NORMAL_SWITCH_PIN].PinFunction =	PK_PinCap_digitalInput;
+	device->Pins[ELECTRIC_TRIM_NORMAL_SWITCH_PIN].PinFunction = PK_PinCap_digitalInput;
 	device->Pins[AUTOPILOT_TRIM_NORMAL_SWITCH_PIN].PinFunction = PK_PinCap_digitalInput;
 	device->Pins[BACKLIGHT_PIN].PinFunction = PK_PinCap_digitalOutput;
 	device->Pins[PARKING_BRAKE_INDICATOR_PIN].PinFunction = PK_PinCap_digitalOutput;
 	/* Active-low OFF is one; seed it before applying output mode. */
 	device->Pins[BACKLIGHT_PIN].DigitalValueSet = 1U;
 	device->Pins[PARKING_BRAKE_INDICATOR_PIN].DigitalValueSet = 1U;
-	if (api->pin_configuration_set(device) != PK_OK) 
+	if (api->pin_configuration_set(device) != PK_OK)
 	{
 		log_write("Unable to configure speedbrake actuator output pins");
-		return(0);
+		return (0);
 	}
-	if (!set_logical_output(api, device, SPEEDBRAKE_ENABLE_PIN, 0)) 
+	if (!set_logical_output(api, device, SPEEDBRAKE_ENABLE_PIN, 0))
 	{
 		log_write("Unable to place speedbrake motor in safe coast state");
-		return(0);
+		return (0);
 	}
-	if (!set_logical_output(api, device, THROTTLE_LEFT_ENABLE_PIN, 0) || !set_logical_output(api, device, THROTTLE_RIGHT_ENABLE_PIN, 0)) 
+	if (!set_logical_output(api, device, THROTTLE_LEFT_ENABLE_PIN, 0) || !set_logical_output(api, device, THROTTLE_RIGHT_ENABLE_PIN, 0))
 	{
 		log_write("Unable to place throttle motors in safe coast state");
-		return(0);
+		return (0);
 	}
 	if (!set_logical_output(api, device, TRIM_ENABLE_PIN, 0) || !set_logical_output(api, device, TRIM_DIRECTION_A_PIN, 0) || !set_logical_output(api, device, TRIM_DIRECTION_B_PIN, 0))
 	{
 		log_write("Unable to place stabiliser-trim motor in safe coast state");
-		return(0);
+		return (0);
 	}
-	if (!set_parking_brake_indicator_output(api, device, 0)) 
+	if (!set_parking_brake_indicator_output(api, device, 0))
 	{
 		log_write("Unable to switch off parking-brake indicator during initialisation");
-		return(0);
+		return (0);
 	}
-	if (!set_backlight_output(api, device, 0)) 
+	if (!set_backlight_output(api, device, 0))
 	{
 		log_write("Unable to switch off TQ backlight during initialisation");
-		return(0);
+		return (0);
 	}
-	if (api->pwm_configuration_set_directly(device, POKEYS_PWM_PERIOD, enabled_channels) != PK_OK || api->pwm_update_directly(device, duty_cycles) != PK_OK) 
+	/*
+	 * The original managed application derives its 50 Hz period from the
+	 * connected PoKeys model. Older controllers use a 12 MHz PWM clock while
+	 * current controllers use 25 MHz. Retain the original device-type fallback
+	 * for libraries which do not populate PWMinternalFrequency.
+	 */
+	pwm_clock = device->info.PWMinternalFrequency;
+	if (pwm_clock == 0U)
+		pwm_clock = device->DeviceData.DeviceTypeID < 10U ? POKEYS_PWM_LEGACY_CLOCK : POKEYS_PWM_REFERENCE_CLOCK;
+	g_pwm_period = (pwm_clock / 1000U) * 20U;
+	if (g_pwm_period == 0U)
+		g_pwm_period = POKEYS_PWM_REFERENCE_PERIOD;
+	if (api->pwm_configuration_set_directly(device, g_pwm_period, enabled_channels) != PK_OK || api->pwm_update_directly(device, duty_cycles) != PK_OK)
 	{
 		log_write("Unable to initialise TQ PWM outputs");
-		return(0);
+		return (0);
 	}
-	log_write("TQ actuator PWM configured at period %u", POKEYS_PWM_PERIOD);
-	log_write("Stabiliser-trim hardware configured for CFY TQ %s topology",	g_config.trim_motor_variant == 3U ? "V3" : (g_config.trim_motor_variant == 5U ? "Pro" : "V4"));	InterlockedExchange(&g_detent_update_requested, 1);
+	log_write("TQ actuator PWM configured at 50 Hz using clock %u and period %u", pwm_clock, g_pwm_period);
+	log_write("Stabiliser-trim hardware configured for CFY TQ %s topology", g_config.trim_motor_variant == 3U ? "V3" : (g_config.trim_motor_variant == 5U ? "Pro" : "V4"));
+	InterlockedExchange(&g_detent_update_requested, 1);
+	TRIM_TRACE("trim hardware configuration variant=%u pwm_clock=%u pwm_period=%u pwm_channels=%u indicator_channel=%u motor_channel=%u pin7_function=%u pin9_function=%u pin27_function=%u pin28_function=%u pin31_function=%u pin27_set=%u pin28_set=%u pin31_set=%u", g_config.trim_motor_variant, pwm_clock, g_pwm_period, POKEYS_PWM_CHANNELS, TRIM_INDICATOR_PWM_CHANNEL, TRIM_MOTOR_PWM_CHANNEL, device->Pins[ELECTRIC_TRIM_NORMAL_SWITCH_PIN].PinFunction, device->Pins[AUTOPILOT_TRIM_NORMAL_SWITCH_PIN].PinFunction, device->Pins[TRIM_DIRECTION_A_PIN].PinFunction, device->Pins[TRIM_ENABLE_PIN].PinFunction, device->Pins[TRIM_DIRECTION_B_PIN].PinFunction, device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueSet, device->Pins[TRIM_ENABLE_PIN].DigitalValueSet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueSet);
 	InterlockedExchange(&g_parking_brake_indicator_update_requested, 1);
 	InterlockedExchange(&g_backlight_update_requested, 1);
 	/* Always drive the interlock to its safe released state after connection. */
@@ -803,7 +882,7 @@ static int configure_actuator_outputs(PokeysApi* api, sPoKeysDevice* device)
 	InterlockedExchange(&g_parking_brake_active_command, PARKING_BRAKE_COMMAND_NONE);
 	InterlockedExchange(&g_parking_brake_release_complete, 0);
 	InterlockedExchange(&g_parking_brake_command, PARKING_BRAKE_COMMAND_RELEASE);
-	return(apply_flight_detent_state(api, device, 1));
+	return (apply_flight_detent_state(api, device, 1));
 }
 
 static int configure_analog_inputs(PokeysApi* api, sPoKeysDevice* device)
@@ -811,24 +890,23 @@ static int configure_analog_inputs(PokeysApi* api, sPoKeysDevice* device)
 	uint32_t index;
 	if (!device->Pins || device->info.iPinCount < 47U)
 	{
-		log_write("PoKeys serial %u does not expose the required analogue pins",
-			device->DeviceData.SerialNumber);
-		return(0);
+		log_write("PoKeys serial %u does not expose the required analogue pins", device->DeviceData.SerialNumber);
+		return (0);
 	}
-	if (api->pin_configuration_get(device) != PK_OK) 
+	if (api->pin_configuration_get(device) != PK_OK)
 	{
 		log_write("Unable to read PoKeys pin configuration");
-		return(0);
+		return (0);
 	}
 	for (index = 40U; index <= 46U; ++index)
 		device->Pins[index].PinFunction = PK_PinCap_analogInput;
-	if (api->pin_configuration_set(device) != PK_OK) 
+	if (api->pin_configuration_set(device) != PK_OK)
 	{
 		log_write("Unable to configure TQ analogue input pins 40-46");
-		return(0);
+		return (0);
 	}
 	log_write("TQ analogue input pins 40-46 configured");
-	return(1);
+	return (1);
 }
 
 /**********************************************************************************/
@@ -836,9 +914,9 @@ static int configure_analog_inputs(PokeysApi* api, sPoKeysDevice* device)
 /**********************************************************************************/
 static int device_matches(const sPoKeysDevice* device)
 {
-	if (g_config.preferred_serial && device->DeviceData.SerialNumber != g_config.preferred_serial) 
-		return(0);
-	return(!g_config.require_cfy_user_id || device->DeviceData.UserID == 12);
+	if (g_config.preferred_serial && device->DeviceData.SerialNumber != g_config.preferred_serial)
+		return (0);
+	return (!g_config.require_cfy_user_id || device->DeviceData.UserID == 12);
 }
 
 /**********************************************************************************/
@@ -847,26 +925,26 @@ static int device_matches(const sPoKeysDevice* device)
 static sPoKeysDevice* connect_usb(PokeysApi* api)
 {
 	int32_t count = api->enumerate_usb(), index;
-	if (count < 0) 
+	if (count < 0)
 	{
 		log_write("USB PoKeys enumeration failed with result %ld", (long)count);
 		return NULL;
 	}
-	if (count > 0) log_write("USB discovery found %ld device(s)", (long)count);
+	if (count > 0)
+		log_write("USB discovery found %ld device(s)", (long)count);
 	for (index = 0; index < count && WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0; ++index)
 	{
 		sPoKeysDevice* device = api->connect_index((uint32_t)index);
 		int32_t data_result;
-		if (!device) 
+		if (!device)
 		{
 			log_write("Unable to connect to USB PoKeys candidate %ld", (long)index);
 			continue;
 		}
 		data_result = api->device_data_get(device);
-		if (data_result != PK_OK) 
+		if (data_result != PK_OK)
 		{
-			log_write("Unable to read USB PoKeys candidate %ld device data (result %ld)",
-				(long)index, (long)data_result);
+			log_write("Unable to read USB PoKeys candidate %ld device data (result %ld)", (long)index, (long)data_result);
 			api->disconnect(device);
 			continue;
 		}
@@ -879,7 +957,7 @@ static sPoKeysDevice* connect_usb(PokeysApi* api)
 				api->disconnect(device);
 				continue;
 			}
-			if (!configure_actuator_outputs(api, device)) 
+			if (!configure_actuator_outputs(api, device))
 			{
 				log_write("USB connection rejected because the TQ actuators could not be made safe");
 				api->disconnect(device);
@@ -903,72 +981,71 @@ static sPoKeysDevice* connect_network(PokeysApi* api)
 	sPoKeysNetworkDeviceSummary devices[64];
 	int32_t count, index;
 	uint32_t timeout = g_config.network_timeout_ms;
-	if (timeout > g_config.discovery_timeout_ms) timeout = g_config.discovery_timeout_ms;
+	if (timeout > g_config.discovery_timeout_ms)
+		timeout = g_config.discovery_timeout_ms;
 	memset(devices, 0, sizeof(devices));
 	count = api->enumerate_network(devices, timeout);
-	if (count < 0) {
+	if (count < 0)
+	{
 		log_write("Network PoKeys enumeration failed with result %ld", (long)count);
 		return NULL;
 	}
-	if (count > 64) count = 64;
-	if (count > 0) log_write("Network discovery found %ld device(s)", (long)count);
-	for (index = 0; index < count && WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0; ++index) 
+	if (count > 64)
+		count = 64;
+	if (count > 0)
+		log_write("Network discovery found %ld device(s)", (long)count);
+	for (index = 0; index < count && WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0; ++index)
 	{
 		sPoKeysDevice* device;
 		int32_t data_result;
 		/* Discovery reports capability/default state; configuration owns the transport used to connect. */
-		devices[index].useUDP = (uint8_t)(InterlockedCompareExchange(
-			&g_network_use_udp, 0, 0) != 0);
-		log_write("Network candidate %ld: serial %u, summary user ID %u, IP %u.%u.%u.%u, %s",
-			(long)index, devices[index].SerialNumber, devices[index].UserID,
-			devices[index].IPaddress[0], devices[index].IPaddress[1],
-			devices[index].IPaddress[2], devices[index].IPaddress[3],
-			devices[index].useUDP ? "UDP" : "TCP");
+		devices[index].useUDP = (uint8_t)(InterlockedCompareExchange(&g_network_use_udp, 0, 0) != 0);
+		log_write("Network candidate %ld: serial %u, summary user ID %u, IP %u.%u.%u.%u, %s", (long)index, devices[index].SerialNumber, devices[index].UserID, devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3], devices[index].useUDP ? "UDP" : "TCP");
 
 		/* The discovery summary can report UserID 0 even when DeviceDataGet reports
 		   the configured value. Only serial number is trustworthy before connect. */
-		if (g_config.preferred_serial && devices[index].SerialNumber != g_config.preferred_serial) 
+		if (g_config.preferred_serial && devices[index].SerialNumber != g_config.preferred_serial)
 		{
 			log_write("Network PoKeys serial %u rejected by preferred-serial filter", devices[index].SerialNumber);
 			continue;
 		}
-	
+
 		device = api->connect_network(&devices[index]);
-		if (!device) 
+		if (!device)
 		{
 			log_write("Unable to connect to network PoKeys serial %u", devices[index].SerialNumber);
 			continue;
 		}
 		data_result = api->device_data_get(device);
-		if (data_result != PK_OK) 
+		if (data_result != PK_OK)
 		{
 			log_write("Unable to read network PoKeys serial %u device data (result %ld)", devices[index].SerialNumber, (long)data_result);
 			api->disconnect(device);
 			continue;
 		}
 		log_write("Connected candidate serial %u reports user ID %u", device->DeviceData.SerialNumber, device->DeviceData.UserID);
-		if (device_matches(device)) 
+		if (device_matches(device))
 		{
 			char ip_address[16];
 			const char* protocol = devices[index].useUDP ? "UDP" : "TCP";
-			snprintf(ip_address, sizeof(ip_address), "%u.%u.%u.%u",	devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3]);
+			snprintf(ip_address, sizeof(ip_address), "%u.%u.%u.%u", devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3]);
 			if (!configure_analog_inputs(api, device))
 			{
 				log_write("Network connection rejected because closed-loop actuator feedback could not be configured");
 				api->disconnect(device);
 				continue;
 			}
-			if (!configure_actuator_outputs(api, device)) 
+			if (!configure_actuator_outputs(api, device))
 			{
 				log_write("Network connection rejected because the TQ actuators could not be made safe");
 				api->disconnect(device);
 				continue;
 			}
-			log_write("Connected to network Pokeys %u at %u.%u.%u.%u", device->DeviceData.SerialNumber,	devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3]);
+			log_write("Connected to network Pokeys %u at %u.%u.%u.%u", device->DeviceData.SerialNumber, devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3]);
 			status_set_connected(device, ip_address, protocol);
 			return (device);
 		}
-		log_write("Network PoKeys serial %u rejected by configured user-ID filter",	device->DeviceData.SerialNumber);
+		log_write("Network PoKeys serial %u rejected by configured user-ID filter", device->DeviceData.SerialNumber);
 		api->disconnect(device);
 	}
 	return (NULL);
@@ -976,12 +1053,39 @@ static sPoKeysDevice* connect_network(PokeysApi* api)
 
 static int pwm_update(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], const char* operation)
 {
-	int32_t result = api->pwm_update_directly(device, duty_cycles);
-	if (result == PK_OK) 
-		return(1);
-	log_write("PoKeys PWM update failed while %s (result %ld)", operation,
-		(long)result);
-	return(0);
+	static TrimTraceHysteresis indicator_trace;
+	static TrimTraceHysteresis motor_trace;
+	uint32_t device_duty_cycles[POKEYS_PWM_CHANNELS];
+	uint32_t trace_indicator;
+	uint32_t trace_motor;
+	uint32_t index;
+	int32_t result;
+	int trim_operation;
+	int trim_trace_changed;
+
+	/*
+	 * All actuator constants retain the original 25 MHz/500000-count reference
+	 * scale. Convert only at the DLL boundary so percentages and servo pulse
+	 * widths remain identical on legacy 12 MHz V3 controllers.
+	 */
+	for (index = 0U; index < POKEYS_PWM_CHANNELS; ++index)
+		device_duty_cycles[index] = (uint32_t)(((uint64_t)duty_cycles[index] * (uint64_t)g_pwm_period + (POKEYS_PWM_REFERENCE_PERIOD / 2U)) / POKEYS_PWM_REFERENCE_PERIOD);
+	trim_operation = operation != NULL && strstr(operation, "trim") != NULL;
+	trim_trace_changed = trim_trace_hysteresis_update(&indicator_trace, duty_cycles[TRIM_INDICATOR_PWM_CHANNEL], TRIM_TRACE_PWM_HYSTERESIS, &trace_indicator);
+	trim_trace_changed |= trim_trace_hysteresis_update(&motor_trace, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], 1U, &trace_motor);
+	if (trim_operation && trim_trace_changed)
+		TRIM_TRACE("ENTER pwm_update operation=%s period=%u reference_indicator=%u reference_motor=%u device_indicator=%u device_motor=%u", operation, g_pwm_period, trace_indicator, trace_motor, (uint32_t)(((uint64_t)trace_indicator * (uint64_t)g_pwm_period + (POKEYS_PWM_REFERENCE_PERIOD / 2U)) / POKEYS_PWM_REFERENCE_PERIOD), (uint32_t)(((uint64_t)trace_motor * (uint64_t)g_pwm_period + (POKEYS_PWM_REFERENCE_PERIOD / 2U)) / POKEYS_PWM_REFERENCE_PERIOD));
+	result = api->pwm_update_directly(device, device_duty_cycles);
+	if (result == PK_OK)
+	{
+		if (trim_operation && trim_trace_changed)
+			TRIM_TRACE("EXIT pwm_update operation=%s result=%ld", operation, (long)result);
+		return (1);
+	}
+	log_write("PoKeys PWM update failed while %s (result %ld)", operation, (long)result);
+	if (trim_operation)
+		TRIM_TRACE("EXIT pwm_update operation=%s result=%ld", operation, (long)result);
+	return (0);
 }
 
 /*
@@ -989,16 +1093,15 @@ static int pwm_update(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycle
  * The public setter only updates atomics so X-Plane callbacks never enter the
  * PoKeys DLL. Lamp pin 11 uses active-low electrical polarity.
  */
-static void process_parking_brake_indicator(PokeysApi* api,
-	sPoKeysDevice* device, int* applied_state)
+static void process_parking_brake_indicator(PokeysApi* api, sPoKeysDevice* device, int* applied_state)
 {
 	int requested = InterlockedExchange(&g_parking_brake_indicator_update_requested, 0) != 0;
 	int desired = InterlockedCompareExchange(&g_parking_brake_indicator, 0, 0) != 0;
 
-	if (!requested && *applied_state == desired) 
+	if (!requested && *applied_state == desired)
 		return;
 
-	if (set_parking_brake_indicator_output(api, device, desired)) 
+	if (set_parking_brake_indicator_output(api, device, desired))
 	{
 		*applied_state = desired;
 		log_write("Parking-brake indicator %s", desired ? "on" : "off");
@@ -1006,7 +1109,7 @@ static void process_parking_brake_indicator(PokeysApi* api,
 	else
 	{
 		InterlockedExchange(&g_parking_brake_indicator_update_requested, 1);
-		log_write("Unable to update parking-brake indicator on pin %u",	PARKING_BRAKE_INDICATOR_PIN);
+		log_write("Unable to update parking-brake indicator on pin %u", PARKING_BRAKE_INDICATOR_PIN);
 	}
 }
 
@@ -1020,9 +1123,9 @@ static void process_backlight(PokeysApi* api, sPoKeysDevice* device, int* applie
 	int requested = InterlockedExchange(&g_backlight_update_requested, 0) != 0;
 	int desired = InterlockedCompareExchange(&g_backlight, 0, 0) != 0;
 
-	if (!requested && *applied_state == desired) 
+	if (!requested && *applied_state == desired)
 		return;
-	if (set_backlight_output(api, device, desired)) 
+	if (set_backlight_output(api, device, desired))
 	{
 		*applied_state = desired;
 		log_write("TQ backlight %s", desired ? "on" : "off");
@@ -1045,20 +1148,20 @@ static void stop_speedbrake_motor(PokeysApi* api, sPoKeysDevice* device, uint32_
 static int start_speedbrake_motor(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], int extend)
 {
 	duty_cycles[SPEEDBRAKE_PWM_CHANNEL] = 0U;
-	if (!pwm_update(api, device, duty_cycles, "preparing the speedbrake motor") || !set_logical_output(api, device, SPEEDBRAKE_ENABLE_PIN, 1) || !set_logical_output(api, device, SPEEDBRAKE_DIRECTION_PIN, extend ? 1 : 0)) 
+	if (!pwm_update(api, device, duty_cycles, "preparing the speedbrake motor") || !set_logical_output(api, device, SPEEDBRAKE_ENABLE_PIN, 1) || !set_logical_output(api, device, SPEEDBRAKE_DIRECTION_PIN, extend ? 1 : 0))
 	{
 		log_write("Unable to prepare speedbrake motor for %s", extend ? "extension" : "retraction/pull-down");
 		set_logical_output(api, device, SPEEDBRAKE_ENABLE_PIN, 0);
-		return(0);
+		return (0);
 	}
 	duty_cycles[SPEEDBRAKE_PWM_CHANNEL] = extend ? SPEEDBRAKE_EXTEND_DUTY : SPEEDBRAKE_RETRACT_DUTY;
-	if (!pwm_update(api, device, duty_cycles, extend ? "extending the speedbrake" : "retracting the speedbrake")) 
+	if (!pwm_update(api, device, duty_cycles, extend ? "extending the speedbrake" : "retracting the speedbrake"))
 	{
 		stop_speedbrake_motor(api, device, duty_cycles);
-		return(0);
+		return (0);
 	}
 	log_write("Speedbrake motor started: %s", extend ? "push up and full extension" : "retract and pull down");
-	return(1);
+	return (1);
 }
 
 /*
@@ -1067,31 +1170,47 @@ static int start_speedbrake_motor(PokeysApi* api, sPoKeysDevice* device, uint32_
  */
 static uint32_t trim_indicator_duty(uint32_t position)
 {
-	static const uint32_t duty_at_unit[16] = 
-	{
-		47415U, 44985U, 43466U, 41900U, 40270U, 38511U, 36433U, 35139U,
-		33908U, 32533U, 30695U, 29081U, 27786U, 26428U, 25005U, 23439U
-	};
-	
+	static const uint32_t duty_at_unit[16] = {47415U, 44985U, 43466U, 41900U, 40270U, 38511U, 36433U, 35139U, 33908U, 32533U, 30695U, 29081U, 27786U, 26428U, 25005U, 23439U};
+
 	float units;
-	float fraction;
+	float fraction = 0.0f;
 	int index;
+	uint32_t result;
+	uint32_t original_position = position;
+	uint32_t trace_original_position;
+	uint32_t trace_clamped_position;
+	uint32_t trace_result;
+	float trace_units;
+	int trace_index;
+	static TrimTraceHysteresis original_position_trace;
+	static TrimTraceHysteresis clamped_position_trace;
+	static TrimTraceHysteresis result_trace;
+	(void)trim_trace_hysteresis_update(&original_position_trace, original_position, TRIM_TRACE_ADC_HYSTERESIS, &trace_original_position);
+	TRIM_TRACE("ENTER trim_indicator_duty position=%u", trace_original_position);
 
 	/* clamp checks */
-	if (position < TRIM_POSITION_MIN) 
+	if (position < TRIM_POSITION_MIN)
 		position = TRIM_POSITION_MIN;
-	if (position > TRIM_POSITION_MAX) 
+	if (position > TRIM_POSITION_MAX)
 		position = TRIM_POSITION_MAX;
-	
-	units = ((float)(position - TRIM_POSITION_MIN) / (float)(TRIM_POSITION_MAX - TRIM_POSITION_MIN)) * 15.0f;
-	
-	index = (int)units;
-	
-	if (index >= 15) 
-		return(duty_at_unit[15]);
 
-	fraction = units - (float)index;
-	return((uint32_t)((float)duty_at_unit[index] + fraction * ((float)duty_at_unit[index + 1] - (float)duty_at_unit[index]) + 0.5f));
+	units = ((float)(position - TRIM_POSITION_MIN) / (float)(TRIM_POSITION_MAX - TRIM_POSITION_MIN)) * 15.0f;
+
+	index = (int)units;
+
+	if (index >= 15)
+		result = duty_at_unit[15];
+	else
+	{
+		fraction = units - (float)index;
+		result = (uint32_t)((float)duty_at_unit[index] + fraction * ((float)duty_at_unit[index + 1] - (float)duty_at_unit[index]) + 0.5f);
+	}
+	(void)trim_trace_hysteresis_update(&clamped_position_trace, position, TRIM_TRACE_ADC_HYSTERESIS, &trace_clamped_position);
+	(void)trim_trace_hysteresis_update(&result_trace, result, TRIM_TRACE_PWM_HYSTERESIS, &trace_result);
+	trace_units = ((float)(trace_clamped_position - TRIM_POSITION_MIN) / (float)(TRIM_POSITION_MAX - TRIM_POSITION_MIN)) * 15.0f;
+	trace_index = (int)trace_units;
+	TRIM_TRACE("EXIT trim_indicator_duty original=%u clamped=%u units=%.3f index=%d result=%u", trace_original_position, trace_clamped_position, trace_units, trace_index, trace_result);
+	return (result);
 }
 
 /* Apply coast, brake or direction using the topology selected in the config. */
@@ -1099,50 +1218,57 @@ static int apply_trim_bridge(PokeysApi* api, sPoKeysDevice* device, int state)
 {
 	int wiper_motor = g_config.trim_motor_variant != 3U;
 	int ok = 1;
+	TRIM_TRACE("ENTER apply_trim_bridge variant=%u wiper_motor=%d requested_state=%d pin27_set=%u pin28_set=%u pin31_set=%u", g_config.trim_motor_variant, wiper_motor, state, device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueSet, device->Pins[TRIM_ENABLE_PIN].DigitalValueSet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueSet);
 
-	if (wiper_motor) 
+	if (wiper_motor)
 	{
 		/* V4/Pro: pin 27/31 are the two H-bridge inputs. */
-		ok &= set_logical_output(api, device, TRIM_DIRECTION_A_PIN,	state == -1 || state == 0);
-		ok &= set_logical_output(api, device, TRIM_DIRECTION_B_PIN,	state == 1 || state == 0);
-		ok &= set_logical_output(api, device, TRIM_ENABLE_PIN, state != 2);
-	} 
-	else
-	{
-		/* V3: pin 27 selects direction and pin 28 enables/brakes the bridge. */
-		ok &= set_logical_output(api, device, TRIM_DIRECTION_A_PIN, state == 1);
-		ok &= set_logical_output(api, device, TRIM_DIRECTION_B_PIN, 0);
+		ok &= set_logical_output(api, device, TRIM_DIRECTION_A_PIN, state == -1 || state == 0);
+		ok &= set_logical_output(api, device, TRIM_DIRECTION_B_PIN, state == 1 || state == 0);
 		ok &= set_logical_output(api, device, TRIM_ENABLE_PIN, state != 2);
 	}
-	return(ok);
+	else
+	{
+		/* The original V3 controller changes pin 27 only when selecting a running direction; brake and coast preserve it. */
+		if (state == -1 || state == 1)
+			ok &= set_logical_output(api, device, TRIM_DIRECTION_A_PIN, state == 1);
+		/* Pin 31 belongs only to the V4/Pro wiper bridge and is not part of V3 motor control. */
+		ok &= set_logical_output(api, device, TRIM_ENABLE_PIN, state != 2);
+	}
+	TRIM_TRACE("EXIT apply_trim_bridge result=%d pin27_electrical=%u pin28_electrical=%u pin31_electrical=%u", ok, device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueSet, device->Pins[TRIM_ENABLE_PIN].DigitalValueSet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueSet);
+	return (ok);
 }
 
 static void stop_trim_motor(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], int brake, int* applied_direction)
 {
 	int bridge_state = brake ? 0 : 2;
-	if (duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U) 
+	TRIM_TRACE("ENTER stop_trim_motor brake=%d bridge_state=%d applied_direction=%d motor_duty=%u running=%ld", brake, bridge_state, *applied_direction, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
+	if (duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
 	{
 		duty_cycles[TRIM_MOTOR_PWM_CHANNEL] = 0U;
 		pwm_update(api, device, duty_cycles, brake ? "braking the stabiliser-trim motor" : "coasting the stabiliser-trim motor");
 	}
-	if (*applied_direction != bridge_state) 
+	if (*applied_direction != bridge_state)
 	{
-		if (!apply_trim_bridge(api, device, bridge_state)) 
+		if (!apply_trim_bridge(api, device, bridge_state))
 		{
 			log_write("Unable to place stabiliser-trim motor in %s state", brake ? "brake" : "coast");
-		} 
+		}
 		else
 		{
 			*applied_direction = bridge_state;
 		}
 	}
 	InterlockedExchange(&g_trim_motor_running, 0);
+	TRIM_TRACE("EXIT stop_trim_motor applied_direction=%d motor_duty=%u running=%ld", *applied_direction, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
 }
 
 static void cancel_trim_brake_ramp(TrimBrakeRamp* ramp)
 {
+	TRIM_TRACE("ENTER cancel_trim_brake_ramp active=%d next_step=%llu target=%ld manual_mode=%d", ramp->active, (unsigned long long)ramp->next_step_at, ramp->target_at_start, ramp->manual_mode);
 	ramp->active = 0;
 	ramp->next_step_at = 0;
+	TRIM_TRACE("EXIT cancel_trim_brake_ramp active=%d next_step=%llu", ramp->active, (unsigned long long)ramp->next_step_at);
 }
 
 /*
@@ -1152,33 +1278,37 @@ static void cancel_trim_brake_ramp(TrimBrakeRamp* ramp)
  * manual-command request. Reductions remain immediate so the position loop can
  * still decelerate promptly as it approaches the target.
  */
-static uint32_t trim_start_ramp_duty(uint32_t current_duty,
-	uint32_t requested_duty, LONG minimum_speed, ULONGLONG now,
-	ULONGLONG* next_step_at)
+static uint32_t trim_start_ramp_duty(uint32_t current_duty, uint32_t requested_duty, LONG minimum_speed, ULONGLONG now, ULONGLONG* next_step_at)
 {
 	uint32_t minimum_duty = (uint32_t)minimum_speed * 5000U;
 	uint32_t next_duty;
+	TRIM_TRACE("ENTER trim_start_ramp_duty current=%u requested=%u minimum_speed=%ld minimum_duty=%u next_step=%llu", current_duty, requested_duty, minimum_speed, minimum_duty, (unsigned long long)*next_step_at);
 
 	if (requested_duty <= current_duty)
 	{
 		*next_step_at = 0;
-		return(requested_duty);
+		TRIM_TRACE("EXIT trim_start_ramp_duty result=%u reason=request_not_increasing next_step=%llu", requested_duty, (unsigned long long)*next_step_at);
+		return (requested_duty);
 	}
 	if (current_duty == 0U)
 	{
 		next_duty = minimum_duty < requested_duty ? minimum_duty : requested_duty;
-		*next_step_at = next_duty < requested_duty ?
-			now + TRIM_START_RAMP_STEP_MS : 0;
-		return(next_duty);
+		*next_step_at = next_duty < requested_duty ? now + TRIM_START_RAMP_STEP_MS : 0;
+		TRIM_TRACE("EXIT trim_start_ramp_duty result=%u reason=initial_step next_step=%llu", next_duty, (unsigned long long)*next_step_at);
+		return (next_duty);
 	}
 	if (*next_step_at != 0 && now < *next_step_at)
-		return(current_duty);
+	{
+		TRIM_TRACE("EXIT trim_start_ramp_duty result=%u reason=waiting next_step=%llu", current_duty, (unsigned long long)*next_step_at);
+		return (current_duty);
+	}
 
 	next_duty = current_duty + TRIM_START_RAMP_STEP_DUTY;
-	if (next_duty > requested_duty) next_duty = requested_duty;
-	*next_step_at = next_duty < requested_duty ?
-		now + TRIM_START_RAMP_STEP_MS : 0;
-	return(next_duty);
+	if (next_duty > requested_duty)
+		next_duty = requested_duty;
+	*next_step_at = next_duty < requested_duty ? now + TRIM_START_RAMP_STEP_MS : 0;
+	TRIM_TRACE("EXIT trim_start_ramp_duty result=%u reason=ramp_step next_step=%llu", next_duty, (unsigned long long)*next_step_at);
+	return (next_duty);
 }
 
 /*
@@ -1192,11 +1322,13 @@ static void progressively_brake_trim_motor(PokeysApi* api, sPoKeysDevice* device
 	ULONGLONG now = GetTickCount64();
 	uint32_t current_duty = duty_cycles[TRIM_MOTOR_PWM_CHANNEL];
 	uint32_t next_duty;
+	TRIM_TRACE("ENTER progressively_brake_trim_motor current_duty=%u applied_direction=%d ramp_active=%d ramp_next=%llu ramp_target=%ld ramp_manual=%d target=%ld manual_mode=%d", current_duty, *applied_direction, ramp->active, (unsigned long long)ramp->next_step_at, ramp->target_at_start, ramp->manual_mode, target, manual_mode);
 
 	if (current_duty == 0U)
 	{
 		cancel_trim_brake_ramp(ramp);
 		stop_trim_motor(api, device, duty_cycles, 1, applied_direction);
+		TRIM_TRACE("EXIT progressively_brake_trim_motor reason=already_stopped");
 		return;
 	}
 	if (!ramp->active)
@@ -1206,7 +1338,11 @@ static void progressively_brake_trim_motor(PokeysApi* api, sPoKeysDevice* device
 		ramp->target_at_start = target;
 		ramp->manual_mode = manual_mode;
 	}
-	if (now < ramp->next_step_at) return;
+	if (now < ramp->next_step_at)
+	{
+		TRIM_TRACE("EXIT progressively_brake_trim_motor reason=waiting next_step=%llu", (unsigned long long)ramp->next_step_at);
+		return;
+	}
 
 	next_duty = current_duty > TRIM_BRAKE_RAMP_STEP_DUTY ? current_duty - TRIM_BRAKE_RAMP_STEP_DUTY : 0U;
 	duty_cycles[TRIM_MOTOR_PWM_CHANNEL] = next_duty;
@@ -1214,15 +1350,18 @@ static void progressively_brake_trim_motor(PokeysApi* api, sPoKeysDevice* device
 	{
 		cancel_trim_brake_ramp(ramp);
 		stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
+		TRIM_TRACE("EXIT progressively_brake_trim_motor reason=pwm_failure");
 		return;
 	}
 	if (next_duty == 0U)
 	{
 		cancel_trim_brake_ramp(ramp);
 		stop_trim_motor(api, device, duty_cycles, 1, applied_direction);
+		TRIM_TRACE("EXIT progressively_brake_trim_motor reason=ramp_complete");
 		return;
 	}
 	ramp->next_step_at = now + TRIM_BRAKE_RAMP_STEP_MS;
+	TRIM_TRACE("EXIT progressively_brake_trim_motor reason=ramp_step next_duty=%u next_step=%llu", next_duty, (unsigned long long)ramp->next_step_at);
 }
 
 /*
@@ -1233,6 +1372,8 @@ static void progressively_brake_trim_motor(PokeysApi* api, sPoKeysDevice* device
  */
 static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t current_position, uint32_t* indicator_applied, int* applied_direction, int* pending_direction, ULONGLONG* direction_deadline, ULONGLONG* acceleration_deadline, TrimBrakeRamp* brake_ramp)
 {
+	static TrimTraceHysteresis current_position_trace;
+	static TrimTraceHysteresis indicator_trace;
 	ULONGLONG now = GetTickCount64();
 	LONG target = InterlockedCompareExchange(&g_trim_target_position, 0, 0);
 	LONG enabled = InterlockedCompareExchange(&g_trim_motor_enabled, 0, 0);
@@ -1247,22 +1388,50 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	LONG speed_percent;
 	uint32_t requested_duty;
 	uint32_t applied_duty;
+	uint32_t trace_current_position;
+	uint32_t trace_indicator;
+	LONG trace_error;
+	LONG trace_distance;
 	int desired_direction;
+	int indicator_trace_changed = trim_trace_hysteresis_update(&indicator_trace, indicator, TRIM_TRACE_PWM_HYSTERESIS, &trace_indicator);
+	(void)trim_trace_hysteresis_update(&current_position_trace, current_position, TRIM_TRACE_ADC_HYSTERESIS, &trace_current_position);
+	trace_error = target - (LONG)trace_current_position;
+	trace_distance = trace_error < 0 ? -trace_error : trace_error;
+	TRIM_TRACE("ENTER process_trim_outputs variant=%u current=%u target=%ld enabled=%ld manual_enabled=%ld manual_direction=%ld minimum_speed=%ld indicator_target=%ld indicator_owned=%ld indicator=%u applied_direction=%d pending_direction=%d direction_deadline=%llu acceleration_deadline=%llu brake_active=%d brake_next=%llu brake_target=%ld brake_manual=%d motor_duty=%u running=%ld", g_config.trim_motor_variant, trace_current_position, target, enabled, manual_enabled, manual_direction, minimum_speed, indicator_target, indicator_simulator_owned, trace_indicator, *applied_direction, *pending_direction, (unsigned long long)*direction_deadline, (unsigned long long)*acceleration_deadline, brake_ramp->active, (unsigned long long)brake_ramp->next_step_at, brake_ramp->target_at_start, brake_ramp->manual_mode, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
 
-	if (*indicator_applied != indicator) 
+	if (*indicator_applied != indicator)
 	{
 		duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] = indicator;
+		if (indicator_trace_changed)
+			TRIM_TRACE("trim indicator update requested requested=%u pwm=[%u,%u,%u,%u,%u,%u]", trace_indicator, duty_cycles[0], trace_indicator, duty_cycles[2], duty_cycles[3], duty_cycles[4], duty_cycles[5]);
 		if (pwm_update(api, device, duty_cycles, "positioning the stabiliser-trim indicator"))
+		{
 			*indicator_applied = indicator;
+			if (indicator_trace_changed)
+				TRIM_TRACE("trim indicator update succeeded applied=%u", trace_indicator);
+		}
+		else
+			TRIM_TRACE("trim indicator update failed requested=%u", indicator);
 	}
 
-	if (!manual_enabled && !enabled) 
+	if (!manual_enabled && !enabled)
 	{
 		*pending_direction = 0;
 		*direction_deadline = 0;
 		*acceleration_deadline = 0;
 		cancel_trim_brake_ramp(brake_ramp);
 		stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
+		TRIM_TRACE("EXIT process_trim_outputs reason=disabled");
+		return;
+	}
+	if ((*applied_direction < 0 && current_position <= TRIM_POSITION_MIN) || (*applied_direction > 0 && current_position >= TRIM_POSITION_MAX))
+	{
+		*pending_direction = 0;
+		*direction_deadline = 0;
+		*acceleration_deadline = 0;
+		cancel_trim_brake_ramp(brake_ramp);
+		stop_trim_motor(api, device, duty_cycles, 1, applied_direction);
+		TRIM_TRACE("EXIT process_trim_outputs reason=active_direction_position_limit current=%u", trace_current_position);
 		return;
 	}
 
@@ -1275,9 +1444,11 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	{
 		int manual_mode = manual_enabled != 0;
 		int new_command = brake_ramp->manual_mode != manual_mode || (manual_mode ? manual_direction != 0 : target != brake_ramp->target_at_start);
+		TRIM_TRACE("trim brake ramp active manual_mode=%d new_command=%d ramp_manual=%d manual_direction=%ld target=%ld ramp_target=%ld", manual_mode, new_command, brake_ramp->manual_mode, manual_direction, target, brake_ramp->target_at_start);
 		if (!new_command)
 		{
 			progressively_brake_trim_motor(api, device, duty_cycles, applied_direction, brake_ramp, target, manual_mode);
+			TRIM_TRACE("EXIT process_trim_outputs reason=brake_ramp_continuing");
 			return;
 		}
 		cancel_trim_brake_ramp(brake_ramp);
@@ -1300,94 +1471,115 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 		desired_direction = error < 0 ? -1 : 1;
 		speed_percent = 0L;
 	}
-	if ((desired_direction < 0 && current_position <= TRIM_POSITION_MIN) ||	(desired_direction > 0 && current_position >= TRIM_POSITION_MAX)) 
+	TRIM_TRACE("trim governor mode=%s error=%ld distance=%ld desired_direction=%d speed_percent=%ld current=%u target=%ld", manual_enabled ? "manual" : "closed_loop", manual_enabled ? error : trace_error, manual_enabled ? distance : trace_distance, desired_direction, speed_percent, trace_current_position, target);
+	if ((desired_direction < 0 && current_position <= TRIM_POSITION_MIN) || (desired_direction > 0 && current_position >= TRIM_POSITION_MAX))
 	{
 		*pending_direction = 0;
 		*direction_deadline = 0;
 		*acceleration_deadline = 0;
 		cancel_trim_brake_ramp(brake_ramp);
 		stop_trim_motor(api, device, duty_cycles, 1, applied_direction);
+		TRIM_TRACE("EXIT process_trim_outputs reason=position_limit current=%u desired_direction=%d", trace_current_position, desired_direction);
 		return;
 	}
-	if ((!manual_enabled && distance <= TRIM_POSITION_DEADBAND) || desired_direction == 0) 
+	if ((!manual_enabled && distance <= TRIM_POSITION_DEADBAND) || desired_direction == 0)
 	{
 		*pending_direction = 0;
 		*direction_deadline = 0;
 		*acceleration_deadline = 0;
 		progressively_brake_trim_motor(api, device, duty_cycles, applied_direction, brake_ramp, target, manual_enabled != 0);
+		TRIM_TRACE("EXIT process_trim_outputs reason=deadband_or_stop distance=%ld desired_direction=%d", manual_enabled ? distance : trace_distance, desired_direction);
 		return;
 	}
 	cancel_trim_brake_ramp(brake_ramp);
 	if (minimum_speed == 0)
 		minimum_speed = g_config.trim_motor_variant == 3U ? 50L : 40L;
-	if (minimum_speed > 100L) minimum_speed = 100L;
+	if (minimum_speed > 100L)
+		minimum_speed = 100L;
+	TRIM_TRACE("trim minimum speed resolved=%ld", minimum_speed);
 
-	if (*pending_direction != 0) 
+	if (*pending_direction != 0)
 	{
-		if (*pending_direction != desired_direction) 
+		if (*pending_direction != desired_direction)
 		{
 			*pending_direction = desired_direction;
 			*direction_deadline = now + TRIM_DIRECTION_BRAKE_MS;
 		}
-		if (now < *direction_deadline) 
+		if (now < *direction_deadline)
+		{
+			TRIM_TRACE("EXIT process_trim_outputs reason=direction_brake_wait pending=%d desired=%d deadline=%llu", *pending_direction, desired_direction, (unsigned long long)*direction_deadline);
 			return;
-		if (!apply_trim_bridge(api, device, desired_direction)) 
+		}
+		if (!apply_trim_bridge(api, device, desired_direction))
 		{
 			log_write("Unable to select stabiliser-trim motor direction");
 			*pending_direction = 0;
 			*acceleration_deadline = 0;
 			cancel_trim_brake_ramp(brake_ramp);
 			stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
+			TRIM_TRACE("EXIT process_trim_outputs reason=bridge_direction_failure desired=%d", desired_direction);
 			return;
 		}
 		*applied_direction = desired_direction;
 		*pending_direction = 0;
 		*direction_deadline = 0;
-	} 
-	else if (*applied_direction != desired_direction) 
+	}
+	else if (*applied_direction != desired_direction)
 	{
 		cancel_trim_brake_ramp(brake_ramp);
 		stop_trim_motor(api, device, duty_cycles, 1, applied_direction);
 		*acceleration_deadline = 0;
 		*pending_direction = desired_direction;
 		*direction_deadline = now + TRIM_DIRECTION_BRAKE_MS;
+		TRIM_TRACE("EXIT process_trim_outputs reason=direction_change_started applied=%d pending=%d deadline=%llu", *applied_direction, *pending_direction, (unsigned long long)*direction_deadline);
 		return;
 	}
 
 	if (!manual_enabled)
 	{
-		speed_percent = minimum_speed +	(LONG)((distance < TRIM_CONSERVATIVE_RANGE ? 0.7f : 2.0f) *	(float)distance);
-		if (speed_percent > 100L) 
+		speed_percent = minimum_speed + (LONG)((distance < TRIM_CONSERVATIVE_RANGE ? 0.7f : 2.0f) * (float)distance);
+		if (speed_percent > 100L)
 			speed_percent = 100L;
-		if (speed_percent < minimum_speed) 
+		if (speed_percent < minimum_speed)
 			speed_percent = minimum_speed;
 	}
 
 	requested_duty = (uint32_t)speed_percent * 5000U;
-	applied_duty = trim_start_ramp_duty(
-		duty_cycles[TRIM_MOTOR_PWM_CHANNEL], requested_duty,
-		minimum_speed, now, acceleration_deadline);
+	applied_duty = trim_start_ramp_duty(duty_cycles[TRIM_MOTOR_PWM_CHANNEL], requested_duty, minimum_speed, now, acceleration_deadline);
+	TRIM_TRACE("trim PWM calculation speed_percent=%ld requested=%u current_duty=%u applied=%u acceleration_deadline=%llu", speed_percent, requested_duty, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], applied_duty, (unsigned long long)*acceleration_deadline);
 	if (duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != applied_duty)
 	{
+		/* The original controller reasserts pin 28 immediately before every non-zero trim PWM update; V3 depends on this enable. */
+		if (applied_duty != 0U && !set_logical_output(api, device, TRIM_ENABLE_PIN, 1))
+		{
+			log_write("Unable to enable the stabiliser-trim motor before applying PWM");
+			cancel_trim_brake_ramp(brake_ramp);
+			*acceleration_deadline = 0;
+			stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
+			TRIM_TRACE("EXIT process_trim_outputs reason=enable_pin_failure");
+			return;
+		}
 		duty_cycles[TRIM_MOTOR_PWM_CHANNEL] = applied_duty;
-		if (!pwm_update(api, device, duty_cycles, "driving the stabiliser-trim wheel")) 
+		if (!pwm_update(api, device, duty_cycles, "driving the stabiliser-trim wheel"))
 		{
 			cancel_trim_brake_ramp(brake_ramp);
 			*acceleration_deadline = 0;
 			stop_trim_motor(api, device, duty_cycles, 0, applied_direction);
+			TRIM_TRACE("EXIT process_trim_outputs reason=motor_pwm_failure");
 			return;
 		}
 	}
 	InterlockedExchange(&g_trim_motor_running, 1);
+	TRIM_TRACE("EXIT process_trim_outputs reason=running target=%ld current=%u error=%ld distance=%ld direction=%d speed=%ld requested_duty=%u applied_duty=%u motor_duty=%u pin27_electrical=%u pin28_electrical=%u pin31_electrical=%u running=%ld", target, trace_current_position, manual_enabled ? error : trace_error, manual_enabled ? distance : trace_distance, desired_direction, speed_percent, requested_duty, applied_duty, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueSet, device->Pins[TRIM_ENABLE_PIN].DigitalValueSet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueSet, InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
 }
 
-static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], ULONGLONG* speedbrake_deadline,	ULONGLONG* parking_brake_deadline)
+static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], ULONGLONG* speedbrake_deadline, ULONGLONG* parking_brake_deadline)
 {
 	ULONGLONG now = GetTickCount64();
 	LONG speedbrake_command;
 	LONG parking_command;
 
-	if (*speedbrake_deadline && now >= *speedbrake_deadline) 
+	if (*speedbrake_deadline && now >= *speedbrake_deadline)
 	{
 		stop_speedbrake_motor(api, device, duty_cycles);
 		*speedbrake_deadline = 0;
@@ -1395,11 +1587,11 @@ static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uin
 		InterlockedExchange(&g_detent_update_requested, 1);
 		log_write("Speedbrake motor stopped after bounded %u ms run", SPEEDBRAKE_RUN_TIME_MS);
 	}
-	if (*parking_brake_deadline && now >= *parking_brake_deadline) 
+	if (*parking_brake_deadline && now >= *parking_brake_deadline)
 	{
-		LONG completed_command = InterlockedCompareExchange( &g_parking_brake_active_command, 0, 0);
+		LONG completed_command = InterlockedCompareExchange(&g_parking_brake_active_command, 0, 0);
 		duty_cycles[PARKING_BRAKE_PWM_CHANNEL] = 0U;
-		if (pwm_update(api, device, duty_cycles, "ending the parking-brake pulse") && completed_command == PARKING_BRAKE_COMMAND_RELEASE) 
+		if (pwm_update(api, device, duty_cycles, "ending the parking-brake pulse") && completed_command == PARKING_BRAKE_COMMAND_RELEASE)
 		{
 			/* A release is confirmed only after its complete bounded pulse. */
 			InterlockedExchange(&g_parking_brake_release_complete, 1);
@@ -1410,15 +1602,15 @@ static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uin
 		log_write("Parking-brake interlock pulse completed");
 	}
 
-	speedbrake_command = InterlockedExchange(&g_speedbrake_command,	SPEEDBRAKE_COMMAND_NONE);
-	if (speedbrake_command != SPEEDBRAKE_COMMAND_NONE) 
+	speedbrake_command = InterlockedExchange(&g_speedbrake_command, SPEEDBRAKE_COMMAND_NONE);
+	if (speedbrake_command != SPEEDBRAKE_COMMAND_NONE)
 	{
 		int extend = speedbrake_command == SPEEDBRAKE_COMMAND_EXTEND;
 		if (*speedbrake_deadline)
 			stop_speedbrake_motor(api, device, duty_cycles);
 		InterlockedExchange(&g_speedbrake_detent_override, 1);
 		InterlockedExchange(&g_detent_update_requested, 1);
-		if (apply_flight_detent_state(api, device, 1) && start_speedbrake_motor(api, device, duty_cycles, extend)) 
+		if (apply_flight_detent_state(api, device, 1) && start_speedbrake_motor(api, device, duty_cycles, extend))
 		{
 			*speedbrake_deadline = now + SPEEDBRAKE_RUN_TIME_MS;
 		}
@@ -1430,16 +1622,16 @@ static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uin
 		}
 	}
 
-	parking_command = InterlockedExchange(&g_parking_brake_command,	PARKING_BRAKE_COMMAND_NONE);
-	if (parking_command != PARKING_BRAKE_COMMAND_NONE) 
+	parking_command = InterlockedExchange(&g_parking_brake_command, PARKING_BRAKE_COMMAND_NONE);
+	if (parking_command != PARKING_BRAKE_COMMAND_NONE)
 	{
 		uint32_t duty = parking_command == PARKING_BRAKE_COMMAND_SET ? PARKING_BRAKE_SET_DUTY : PARKING_BRAKE_RELEASE_DUTY;
 		duty_cycles[PARKING_BRAKE_PWM_CHANNEL] = duty;
-		if (pwm_update(api, device, duty_cycles, parking_command == PARKING_BRAKE_COMMAND_SET ?	"setting the parking-brake interlock" :	"releasing the parking-brake interlock")) 
+		if (pwm_update(api, device, duty_cycles, parking_command == PARKING_BRAKE_COMMAND_SET ? "setting the parking-brake interlock" : "releasing the parking-brake interlock"))
 		{
 			InterlockedExchange(&g_parking_brake_release_complete, 0);
 			InterlockedExchange(&g_parking_brake_active_command, parking_command);
-			InterlockedExchange(&g_parking_brake_state,	parking_command == PARKING_BRAKE_COMMAND_SET ? POKEYS_PARKING_BRAKE_SET : POKEYS_PARKING_BRAKE_RELEASED);
+			InterlockedExchange(&g_parking_brake_state, parking_command == PARKING_BRAKE_COMMAND_SET ? POKEYS_PARKING_BRAKE_SET : POKEYS_PARKING_BRAKE_RELEASED);
 			*parking_brake_deadline = now + PARKING_BRAKE_PULSE_MS;
 			log_write("Parking-brake interlock %s pulse started (duty %u)", parking_command == PARKING_BRAKE_COMMAND_SET ? "set" : "release", duty);
 		}
@@ -1448,38 +1640,49 @@ static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uin
 
 static const char* throttle_test_stage_name(int stage)
 {
-	switch (stage) 
+	switch (stage)
 	{
-	case THROTTLE_TEST_LEFT_MEDIUM_OPEN: return "Left throttle: medium to fully open";
-	case THROTTLE_TEST_LEFT_MEDIUM_CLOSE: return "Left throttle: medium return to closed";
-	case THROTTLE_TEST_LEFT_FAST_OPEN: return "Left throttle: fast to fully open";
-	case THROTTLE_TEST_LEFT_FAST_CLOSE: return "Left throttle: fast return to closed";
-	case THROTTLE_TEST_RIGHT_MEDIUM_OPEN: return "Right throttle: medium to fully open";
-	case THROTTLE_TEST_RIGHT_MEDIUM_CLOSE: return "Right throttle: medium return to closed";
-	case THROTTLE_TEST_RIGHT_FAST_OPEN: return "Right throttle: fast to fully open";
-	case THROTTLE_TEST_RIGHT_FAST_CLOSE: return "Right throttle: fast return to closed";
-	case THROTTLE_TEST_BOTH_FAST_OPEN: return "Both throttles: fast to fully open";
-	case THROTTLE_TEST_BOTH_FAST_CLOSE: return "Both throttles: fast return to closed";
-	default: return "Throttle test ready";
+	case THROTTLE_TEST_LEFT_MEDIUM_OPEN:
+		return "Left throttle: medium to fully open";
+	case THROTTLE_TEST_LEFT_MEDIUM_CLOSE:
+		return "Left throttle: medium return to closed";
+	case THROTTLE_TEST_LEFT_FAST_OPEN:
+		return "Left throttle: fast to fully open";
+	case THROTTLE_TEST_LEFT_FAST_CLOSE:
+		return "Left throttle: fast return to closed";
+	case THROTTLE_TEST_RIGHT_MEDIUM_OPEN:
+		return "Right throttle: medium to fully open";
+	case THROTTLE_TEST_RIGHT_MEDIUM_CLOSE:
+		return "Right throttle: medium return to closed";
+	case THROTTLE_TEST_RIGHT_FAST_OPEN:
+		return "Right throttle: fast to fully open";
+	case THROTTLE_TEST_RIGHT_FAST_CLOSE:
+		return "Right throttle: fast return to closed";
+	case THROTTLE_TEST_BOTH_FAST_OPEN:
+		return "Both throttles: fast to fully open";
+	case THROTTLE_TEST_BOTH_FAST_CLOSE:
+		return "Both throttles: fast return to closed";
+	default:
+		return "Throttle test ready";
 	}
 }
 
 static int throttle_stage_uses_left(int stage)
 {
-	return(stage <= THROTTLE_TEST_LEFT_FAST_CLOSE || stage >= THROTTLE_TEST_BOTH_FAST_OPEN);
+	return (stage <= THROTTLE_TEST_LEFT_FAST_CLOSE || stage >= THROTTLE_TEST_BOTH_FAST_OPEN);
 }
 
 static int throttle_stage_uses_right(int stage)
 {
-	return((stage >= THROTTLE_TEST_RIGHT_MEDIUM_OPEN &&	stage <= THROTTLE_TEST_RIGHT_FAST_CLOSE) ||stage >= THROTTLE_TEST_BOTH_FAST_OPEN);
+	return ((stage >= THROTTLE_TEST_RIGHT_MEDIUM_OPEN && stage <= THROTTLE_TEST_RIGHT_FAST_CLOSE) || stage >= THROTTLE_TEST_BOTH_FAST_OPEN);
 }
 
 static int throttle_stage_is_opening(int stage)
 {
-	return((stage & 1) != 0);
+	return ((stage & 1) != 0);
 }
 
-static void stop_throttle_motors(PokeysApi* api, sPoKeysDevice* device,	uint32_t duty_cycles[POKEYS_PWM_CHANNELS])
+static void stop_throttle_motors(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS])
 {
 	duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] = 0U;
 	duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] = 0U;
@@ -1514,11 +1717,12 @@ static int detect_throttle_manual_override(int index, LONG target, LONG position
 	int target_changed;
 	int result = 0;
 
-	if (distance < 0) distance = -distance;
+	if (distance < 0)
+		distance = -distance;
 	if (!monitor->initialised)
 	{
 		reset_throttle_manual_monitor(monitor, target, position, now);
-		return(0);
+		return (0);
 	}
 
 	target_changed = target != monitor->previous_target;
@@ -1533,7 +1737,7 @@ static int detect_throttle_manual_override(int index, LONG target, LONG position
 	else if (monitor->previous_direction == 2 && now - monitor->coast_started_at >= THROTTLE_MANUAL_COAST_GRACE_MS)
 	{
 		LONG uncommanded = position - monitor->coast_reference;
-		if (uncommanded < 0) 
+		if (uncommanded < 0)
 			uncommanded = -uncommanded;
 		if (uncommanded > THROTTLE_MANUAL_ERROR_COUNTS)
 			result = 1;
@@ -1577,7 +1781,7 @@ static int detect_throttle_manual_override(int index, LONG target, LONG position
 		InterlockedExchange(&g_throttle_follow_enabled, 0);
 		reset_throttle_manual_monitor(monitor, target, position, now);
 	}
-	return(result);
+	return (result);
 }
 
 /*
@@ -1600,8 +1804,7 @@ static int detect_throttle_manual_override(int index, LONG target, LONG position
  * read as one coherent command and both PWM duties are applied by one
  * PK_PWMUpdateDirectly call.
  */
-static int throttle_follow_command_snapshot(LONG* enabled, LONG target[2],
-	LONG minimum[2])
+static int throttle_follow_command_snapshot(LONG* enabled, LONG target[2], LONG minimum[2])
 {
 	int attempt;
 
@@ -1612,23 +1815,21 @@ static int throttle_follow_command_snapshot(LONG* enabled, LONG target[2],
 	 */
 	for (attempt = 0; attempt < 8; ++attempt)
 	{
-		LONG sequence_before = InterlockedCompareExchange(
-			&g_throttle_follow_command_sequence, 0, 0);
+		LONG sequence_before = InterlockedCompareExchange(&g_throttle_follow_command_sequence, 0, 0);
 		LONG sequence_after;
 
-		if ((sequence_before & 1L) != 0) continue;
+		if ((sequence_before & 1L) != 0)
+			continue;
 		target[0] = InterlockedCompareExchange(&g_throttle_left_target, 0, 0);
 		target[1] = InterlockedCompareExchange(&g_throttle_right_target, 0, 0);
 		minimum[0] = InterlockedCompareExchange(&g_throttle_left_min_speed, 0, 0);
 		minimum[1] = InterlockedCompareExchange(&g_throttle_right_min_speed, 0, 0);
 		*enabled = InterlockedCompareExchange(&g_throttle_follow_enabled, 0, 0);
-		sequence_after = InterlockedCompareExchange(
-			&g_throttle_follow_command_sequence, 0, 0);
-		if (sequence_before == sequence_after &&
-			(sequence_after & 1L) == 0)
-			return(1);
+		sequence_after = InterlockedCompareExchange(&g_throttle_follow_command_sequence, 0, 0);
+		if (sequence_before == sequence_after && (sequence_after & 1L) == 0)
+			return (1);
 	}
-	return(0);
+	return (0);
 }
 
 /*
@@ -1637,17 +1838,18 @@ static int throttle_follow_command_snapshot(LONG* enabled, LONG target[2],
  * be scaled to the common 0..4095 lever-travel domain before governor gains,
  * deadbands or manual-intervention thresholds are applied.
  */
-static LONG corrected_throttle_position(LONG raw_position, LONG minimum,
-	LONG maximum)
+static LONG corrected_throttle_position(LONG raw_position, LONG minimum, LONG maximum)
 {
 	LONGLONG numerator;
 	LONG span;
 
-	if (maximum <= minimum || raw_position <= minimum) return(0L);
-	if (raw_position >= maximum) return(4095L);
+	if (maximum <= minimum || raw_position <= minimum)
+		return (0L);
+	if (raw_position >= maximum)
+		return (4095L);
 	span = maximum - minimum;
 	numerator = (LONGLONG)(raw_position - minimum) * 4095LL;
-	return((LONG)((numerator + span / 2L) / span));
+	return ((LONG)((numerator + span / 2L) / span));
 }
 
 static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t left_position, uint32_t right_position, int* left_direction, int* right_direction, float* synchronisation_correction)
@@ -1659,11 +1861,11 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	LONG* applied[2];
 	LONG error[2];
 	LONG distance[2];
-	uint8_t pwm_channel[2] = { THROTTLE_LEFT_PWM_CHANNEL, THROTTLE_RIGHT_PWM_CHANNEL };
-	uint32_t requested_duty[2] = { 0U, 0U };
+	uint8_t pwm_channel[2] = {THROTTLE_LEFT_PWM_CHANNEL, THROTTLE_RIGHT_PWM_CHANNEL};
+	uint32_t requested_duty[2] = {0U, 0U};
 	LONG limit_min[2];
 	LONG limit_max[2];
-	int desired[2] = { 2, 2 };
+	int desired[2] = {2, 2};
 	int changed = 0;
 	int bridge_changed = 0;
 	int coupled_start = 0;
@@ -1677,7 +1879,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	 * preceding coherent command. Preserve them for this worker pass and retry
 	 * at the next pass instead of creating a visible stop/start motor pulse.
 	 */
-	if (!throttle_follow_command_snapshot(&enabled, target, minimum)) return;
+	if (!throttle_follow_command_snapshot(&enabled, target, minimum))
+		return;
 	applied[0] = left_direction;
 	applied[1] = right_direction;
 	limit_min[0] = InterlockedCompareExchange(&g_throttle_left_min, 0, 0);
@@ -1699,10 +1902,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		return;
 	}
 
-	current[0] = corrected_throttle_position((LONG)left_position,
-		limit_min[0], limit_max[0]);
-	current[1] = corrected_throttle_position((LONG)right_position,
-		limit_min[1], limit_max[1]);
+	current[0] = corrected_throttle_position((LONG)left_position, limit_min[0], limit_max[0]);
+	current[1] = corrected_throttle_position((LONG)right_position, limit_min[1], limit_max[1]);
 	for (i = 0; i < 2; ++i)
 	{
 		error[i] = target[i] - current[i];
@@ -1710,19 +1911,14 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	}
 	{
 		float target_difference = (float)(target[0] - target[1]) / 4095.0f;
-		if (target_difference < 0.0f) target_difference = -target_difference;
-		coupled_start = target_difference <= THROTTLE_SYNC_TARGET_TOLERANCE &&
-			((error[0] > 0 && error[1] > 0) ||
-			 (error[0] < 0 && error[1] < 0)) &&
-			(distance[0] > THROTTLE_FOLLOW_START_DEADBAND ||
-			 distance[1] > THROTTLE_FOLLOW_START_DEADBAND);
+		if (target_difference < 0.0f)
+			target_difference = -target_difference;
+		coupled_start = target_difference <= THROTTLE_SYNC_TARGET_TOLERANCE && ((error[0] > 0 && error[1] > 0) || (error[0] < 0 && error[1] < 0)) && (distance[0] > THROTTLE_FOLLOW_START_DEADBAND || distance[1] > THROTTLE_FOLLOW_START_DEADBAND);
 	}
 
 	for (i = 0; i < 2; ++i)
 	{
-		LONG start_deadband = coupled_start ?
-			THROTTLE_FOLLOW_STOP_DEADBAND :
-			THROTTLE_FOLLOW_START_DEADBAND;
+		LONG start_deadband = coupled_start ? THROTTLE_FOLLOW_STOP_DEADBAND : THROTTLE_FOLLOW_START_DEADBAND;
 		float speed_percent;
 		float gain;
 
@@ -1737,8 +1933,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			if (distance[i] <= start_deadband)
 				continue;
 		}
-		else if ((*applied[i] == 1 && error[i] <= 0) ||
-			(*applied[i] == 0 && error[i] >= 0))
+		else if ((*applied[i] == 1 && error[i] <= 0) || (*applied[i] == 0 && error[i] >= 0))
 		{
 			/*
 			 * Coast immediately after crossing the target and require a wider
@@ -1767,8 +1962,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 	 * and feedback values are already in the original common 0..4095 corrected
 	 * domain, so their fractions represent lever angle rather than raw voltage.
 	 */
-	if (desired[0] != 2 && desired[0] == desired[1] &&
-		limit_max[0] > limit_min[0] && limit_max[1] > limit_min[1])
+	if (desired[0] != 2 && desired[0] == desired[1] && limit_max[0] > limit_min[0] && limit_max[1] > limit_min[1])
 	{
 		float target_normalised[2];
 		float current_normalised[2];
@@ -1783,7 +1977,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			current_normalised[i] = (float)current[i] / 4095.0f;
 		}
 		target_difference = target_normalised[0] - target_normalised[1];
-		if (target_difference < 0.0f) target_difference = -target_difference;
+		if (target_difference < 0.0f)
+			target_difference = -target_difference;
 		if (target_difference <= THROTTLE_SYNC_TARGET_TOLERANCE)
 		{
 			/*
@@ -1791,16 +1986,15 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			 * the direction of travel. Subtracting the target separation avoids
 			 * incorrectly forcing slightly asymmetric engine commands together.
 			 */
-			lead = ((current_normalised[0] - target_normalised[0]) -
-				(current_normalised[1] - target_normalised[1])) *
-				(desired[0] == 1 ? 1.0f : -1.0f);
-			if (lead > -THROTTLE_SYNC_POSITION_DEADBAND &&
-				lead < THROTTLE_SYNC_POSITION_DEADBAND)
+			lead = ((current_normalised[0] - target_normalised[0]) - (current_normalised[1] - target_normalised[1])) * (desired[0] == 1 ? 1.0f : -1.0f);
+			if (lead > -THROTTLE_SYNC_POSITION_DEADBAND && lead < THROTTLE_SYNC_POSITION_DEADBAND)
 				requested_correction = 0.0f;
 			else
 				requested_correction = lead * THROTTLE_SYNC_GAIN;
+
 			if (requested_correction > (float)THROTTLE_SYNC_MAX_CORRECTION)
 				requested_correction = (float)THROTTLE_SYNC_MAX_CORRECTION;
+
 			if (requested_correction < -(float)THROTTLE_SYNC_MAX_CORRECTION)
 				requested_correction = -(float)THROTTLE_SYNC_MAX_CORRECTION;
 
@@ -1809,16 +2003,11 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			 * cannot make the two motor duties jump in opposite directions on
 			 * successive control passes.
 			 */
-			*synchronisation_correction += THROTTLE_SYNC_FILTER_ALPHA *
-				(requested_correction - *synchronisation_correction);
-			if (requested_correction == 0.0f &&
-				*synchronisation_correction > -THROTTLE_SYNC_FILTER_SETTLED &&
-				*synchronisation_correction < THROTTLE_SYNC_FILTER_SETTLED)
+			*synchronisation_correction += THROTTLE_SYNC_FILTER_ALPHA * (requested_correction - *synchronisation_correction);
+			if (requested_correction == 0.0f && *synchronisation_correction > -THROTTLE_SYNC_FILTER_SETTLED && *synchronisation_correction < THROTTLE_SYNC_FILTER_SETTLED)
 				*synchronisation_correction = 0.0f;
-			speed_percent[0] = (float)requested_duty[0] / 5000.0f -
-				*synchronisation_correction;
-			speed_percent[1] = (float)requested_duty[1] / 5000.0f +
-				*synchronisation_correction;
+			speed_percent[0] = (float)requested_duty[0] / 5000.0f - *synchronisation_correction;
+			speed_percent[1] = (float)requested_duty[1] / 5000.0f + *synchronisation_correction;
 			for (i = 0; i < 2; ++i)
 			{
 				if (speed_percent[i] <= (float)minimum[i])
@@ -1846,8 +2035,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 
 	for (i = 0; i < 2; ++i)
 	{
-		if (desired[i] != 2 && *applied[i] != 2 &&
-			*applied[i] != desired[i])
+		if (desired[i] != 2 && *applied[i] != 2 && *applied[i] != desired[i])
 		{
 			/* Coast before changing polarity; resume on the next worker pass. */
 			duty_cycles[pwm_channel[i]] = 0U;
@@ -1874,8 +2062,7 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 			changed = 1;
 		}
 	}
-	if (bridge_changed && !set_throttle_bridge_outputs(api, device,
-		*left_direction, *right_direction))
+	if (bridge_changed && !set_throttle_bridge_outputs(api, device, *left_direction, *right_direction))
 	{
 		log_write("Unable to apply paired A/T throttle bridge state");
 		stop_throttle_motors(api, device, duty_cycles);
@@ -1884,7 +2071,8 @@ static void process_throttle_follow(PokeysApi* api, sPoKeysDevice* device, uint3
 		*synchronisation_correction = 0.0f;
 		return;
 	}
-	if (bridge_changed) changed = 1;
+	if (bridge_changed)
+		changed = 1;
 	if (changed && !pwm_update(api, device, duty_cycles, "following simulator A/T throttle targets"))
 	{
 		stop_throttle_motors(api, device, duty_cycles);
@@ -1902,34 +2090,35 @@ static int start_throttle_test_stage(PokeysApi* api, sPoKeysDevice* device, uint
 	uint32_t duty = ((stage >= THROTTLE_TEST_LEFT_FAST_OPEN && stage <= THROTTLE_TEST_LEFT_FAST_CLOSE) || stage >= THROTTLE_TEST_RIGHT_FAST_OPEN) ? THROTTLE_FAST_DUTY : THROTTLE_MEDIUM_DUTY;
 
 	stop_throttle_motors(api, device, duty_cycles);
-	if ((use_left && (!set_logical_output(api, device, THROTTLE_LEFT_DIRECTION_PIN,	opening) || !set_logical_output(api, device, THROTTLE_LEFT_ENABLE_PIN, 1))) || (use_right && (!set_logical_output(api, device, THROTTLE_RIGHT_DIRECTION_PIN, opening) || !set_logical_output(api, device, THROTTLE_RIGHT_ENABLE_PIN, 1)))) 
+	if ((use_left && (!set_logical_output(api, device, THROTTLE_LEFT_DIRECTION_PIN, opening) || !set_logical_output(api, device, THROTTLE_LEFT_ENABLE_PIN, 1))) || (use_right && (!set_logical_output(api, device, THROTTLE_RIGHT_DIRECTION_PIN, opening) || !set_logical_output(api, device, THROTTLE_RIGHT_ENABLE_PIN, 1))))
 	{
 		log_write("Unable to prepare throttle motors for test stage %d", stage);
 		stop_throttle_motors(api, device, duty_cycles);
-		return(0);
+		return (0);
 	}
-	if (use_left) duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] = duty;
-	if (use_right) duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] = duty;
-	if (!pwm_update(api, device, duty_cycles, throttle_test_stage_name(stage))) 
+	if (use_left)
+		duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] = duty;
+	if (use_right)
+		duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] = duty;
+	if (!pwm_update(api, device, duty_cycles, throttle_test_stage_name(stage)))
 	{
 		stop_throttle_motors(api, device, duty_cycles);
-		return(0);
+		return (0);
 	}
 	throttle_test_status_set(throttle_test_stage_name(stage));
-	log_write("Throttle test stage %d/10 started: %s (duty %u)", stage,	throttle_test_stage_name(stage), duty);
-	return(1);
+	log_write("Throttle test stage %d/10 started: %s (duty %u)", stage, throttle_test_stage_name(stage), duty);
+	return (1);
 }
 
-static int throttle_test_endpoint_reached(int stage, uint32_t left_position,
-	uint32_t right_position)
+static int throttle_test_endpoint_reached(int stage, uint32_t left_position, uint32_t right_position)
 {
 	uint32_t left_min = (uint32_t)InterlockedCompareExchange(&g_throttle_left_min, 0, 0);
 	uint32_t left_max = (uint32_t)InterlockedCompareExchange(&g_throttle_left_max, 0, 0);
 	uint32_t right_min = (uint32_t)InterlockedCompareExchange(&g_throttle_right_min, 0, 0);
 	uint32_t right_max = (uint32_t)InterlockedCompareExchange(&g_throttle_right_max, 0, 0);
 	int opening = throttle_stage_is_opening(stage);
-	int left_reached = !throttle_stage_uses_left(stage) || (opening ? left_position + THROTTLE_ENDPOINT_TOLERANCE >= left_max :	left_position <= left_min + THROTTLE_ENDPOINT_TOLERANCE);
-	int right_reached = !throttle_stage_uses_right(stage) || (opening ?	right_position + THROTTLE_ENDPOINT_TOLERANCE >= right_max :	right_position <= right_min + THROTTLE_ENDPOINT_TOLERANCE);
+	int left_reached = !throttle_stage_uses_left(stage) || (opening ? left_position + THROTTLE_ENDPOINT_TOLERANCE >= left_max : left_position <= left_min + THROTTLE_ENDPOINT_TOLERANCE);
+	int right_reached = !throttle_stage_uses_right(stage) || (opening ? right_position + THROTTLE_ENDPOINT_TOLERANCE >= right_max : right_position <= right_min + THROTTLE_ENDPOINT_TOLERANCE);
 	return left_reached && right_reached;
 }
 
@@ -1943,14 +2132,15 @@ static void abort_throttle_test(PokeysApi* api, sPoKeysDevice* device, uint32_t 
 	log_write("Throttle test aborted: %s", reason);
 }
 
-static void process_throttle_test(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t left_position,	uint32_t right_position, int* stage, ULONGLONG* deadline)
+static void process_throttle_test(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], uint32_t left_position, uint32_t right_position, int* stage, ULONGLONG* deadline)
 {
 	ULONGLONG now = GetTickCount64();
 
-	if (InterlockedExchange(&g_throttle_test_requested, 0) != 0) 
+	if (InterlockedExchange(&g_throttle_test_requested, 0) != 0)
 	{
-		if (*stage != THROTTLE_TEST_IDLE) return;
-		if (InterlockedCompareExchange(&g_throttle_limits_valid, 0, 0) == 0) 
+		if (*stage != THROTTLE_TEST_IDLE)
+			return;
+		if (InterlockedCompareExchange(&g_throttle_limits_valid, 0, 0) == 0)
 		{
 			throttle_test_status_set("Throttle test unavailable: calibration is invalid");
 			return;
@@ -1961,13 +2151,14 @@ static void process_throttle_test(PokeysApi* api, sPoKeysDevice* device, uint32_
 		log_write("Full throttle motor test requested");
 	}
 
-	if (*stage == THROTTLE_TEST_IDLE) return;
-	if (*deadline == 0) 
+	if (*stage == THROTTLE_TEST_IDLE)
+		return;
+	if (*deadline == 0)
 	{
-		if (throttle_test_endpoint_reached(*stage, left_position, right_position)) 
+		if (throttle_test_endpoint_reached(*stage, left_position, right_position))
 		{
 			++*stage;
-			if (*stage > THROTTLE_TEST_BOTH_FAST_CLOSE) 
+			if (*stage > THROTTLE_TEST_BOTH_FAST_CLOSE)
 			{
 				stop_throttle_motors(api, device, duty_cycles);
 				*stage = THROTTLE_TEST_IDLE;
@@ -1977,7 +2168,7 @@ static void process_throttle_test(PokeysApi* api, sPoKeysDevice* device, uint32_
 				return;
 			}
 		}
-		if (!start_throttle_test_stage(api, device, duty_cycles, *stage)) 
+		if (!start_throttle_test_stage(api, device, duty_cycles, *stage))
 		{
 			abort_throttle_test(api, device, duty_cycles, stage, deadline, "Throttle test aborted: unable to start motor stage");
 			return;
@@ -1992,14 +2183,14 @@ static void process_throttle_test(PokeysApi* api, sPoKeysDevice* device, uint32_
 		stop_throttle_motors(api, device, duty_cycles);
 		++*stage;
 		*deadline = 0;
-		if (*stage > THROTTLE_TEST_BOTH_FAST_CLOSE) 
+		if (*stage > THROTTLE_TEST_BOTH_FAST_CLOSE)
 		{
 			*stage = THROTTLE_TEST_IDLE;
 			InterlockedExchange(&g_throttle_test_running, 0);
 			throttle_test_status_set("Throttle test completed successfully");
 			log_write("Full throttle motor test completed successfully");
 		}
-	} 
+	}
 	else if (now >= *deadline)
 	{
 		abort_throttle_test(api, device, duty_cycles, stage, deadline, "Throttle test stopped: calibrated endpoint timeout");
@@ -2011,16 +2202,17 @@ static void request_automatic_speedbrake_pull_down(uint32_t position, int motor_
 	uint32_t closed = (uint32_t)InterlockedCompareExchange(&g_speedbrake_closed_position, 0, 0);
 	uint32_t threshold = closed + SPEEDBRAKE_CLOSED_TOLERANCE;
 	uint32_t rearm_threshold;
-	if (threshold > 4095U) threshold = 4095U;
+	if (threshold > 4095U)
+		threshold = 4095U;
 	rearm_threshold = threshold < 3995U ? threshold + 100U : 4095U;
 
-	if (position > rearm_threshold) 
+	if (position > rearm_threshold)
 	{
 		*armed = 1;
-	} 
-	else if (position <= threshold) 
+	}
+	else if (position <= threshold)
 	{
-		if (*armed && !motor_running) 
+		if (*armed && !motor_running)
 		{
 			InterlockedCompareExchange(&g_speedbrake_command, SPEEDBRAKE_COMMAND_RETRACT, SPEEDBRAKE_COMMAND_NONE);
 			log_write("Speedbrake entered closed/stop range; pull-down requested");
@@ -2040,7 +2232,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	unsigned int read_failures = 0;
 	unsigned int health_counter = 0;
 	unsigned int digital_read_failures = 0;
-	uint32_t duty_cycles[POKEYS_PWM_CHANNELS] = { 0U };
+	uint32_t duty_cycles[POKEYS_PWM_CHANNELS] = {0U};
 	ULONGLONG speedbrake_deadline = 0;
 	ULONGLONG parking_brake_deadline = 0;
 	int parking_brake_indicator_applied = -1;
@@ -2064,6 +2256,9 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	MinMaxFeedbackFilter trim_feedback_filter;
 	MinMaxFeedbackFilter throttle_left_feedback_filter;
 	MinMaxFeedbackFilter throttle_right_feedback_filter;
+	TrimTraceHysteresis raw_trim_trace = {0U};
+	TrimTraceHysteresis inverted_trim_trace = {0U};
+	TrimTraceHysteresis filtered_trim_trace = {0U};
 	(void)parameter;
 	minmax_feedback_filter_reset(&trim_feedback_filter);
 	minmax_feedback_filter_reset(&throttle_left_feedback_filter);
@@ -2077,29 +2272,30 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 		status_set_disconnected(api_error);
 		return (1);
 	}
-	while (WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0) 
+	while (WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0)
 	{
 		if (!device)
 		{
 			/* A disconnected worker uses the latest saved hardware selections. */
 			InterlockedExchange(&g_network_protocol_change_requested, 0);
 			InterlockedExchange(&g_trim_motor_variant_change_requested, 0);
-			g_config.trim_motor_variant = (uint32_t)InterlockedCompareExchange(
-				&g_trim_motor_variant_requested, 0, 0);
+			g_config.trim_motor_variant = (uint32_t)InterlockedCompareExchange(&g_trim_motor_variant_requested, 0, 0);
 			if (g_config.search_usb)
 			{
 				device = connect_usb(&api);
-				if (device) connected_over_network = 0;
+				if (device)
+					connected_over_network = 0;
 			}
 			if (!device && g_config.search_network)
 			{
 				device = connect_network(&api);
-				if (device) connected_over_network = 1;
+				if (device)
+					connected_over_network = 1;
 			}
 		}
-		if (device) 
+		if (device)
 		{
-			uint32_t raw[POKEYS_LEVER_COUNT] = { 0 };
+			uint32_t raw[POKEYS_LEVER_COUNT] = {0};
 			uint32_t throttle_left_position;
 			uint32_t throttle_right_position;
 			int simulator_controls_active;
@@ -2108,24 +2304,21 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				if (connected_over_network)
 					reconnect_for_protocol = 1;
 				else
-					log_write("PoKeys network protocol preference changed to %s; active USB connection retained",
-						InterlockedCompareExchange(&g_network_use_udp, 0, 0) ? "UDP" : "TCP");
+					log_write("PoKeys network protocol preference changed to %s; active USB connection retained", InterlockedCompareExchange(&g_network_use_udp, 0, 0) ? "UDP" : "TCP");
 			}
 			if (InterlockedExchange(&g_trim_motor_variant_change_requested, 0) != 0)
 			{
-				uint32_t requested_variant = (uint32_t)InterlockedCompareExchange(
-					&g_trim_motor_variant_requested, 0, 0);
+				uint32_t requested_variant = (uint32_t)InterlockedCompareExchange(&g_trim_motor_variant_requested, 0, 0);
 				if (requested_variant != g_config.trim_motor_variant)
 					reconnect_for_variant = 1;
 			}
-			if (WaitForSingleObject(g_stop_event, POKEYS_CONTROL_INTERVAL_MS) == WAIT_OBJECT_0) break;
+			if (WaitForSingleObject(g_stop_event, POKEYS_CONTROL_INTERVAL_MS) == WAIT_OBJECT_0)
+				break;
 			process_actuator_commands(&api, device, duty_cycles, &speedbrake_deadline, &parking_brake_deadline);
 			process_parking_brake_indicator(&api, device, &parking_brake_indicator_applied);
 			process_backlight(&api, device, &backlight_applied);
 			apply_flight_detent_state(&api, device, 0);
-			simulator_controls_active =
-				InterlockedCompareExchange(&g_simulator_aircraft_active, 0, 0) != 0 ||
-				InterlockedCompareExchange(&g_calibration_active, 0, 0) != 0;
+			simulator_controls_active = InterlockedCompareExchange(&g_simulator_aircraft_active, 0, 0) != 0 || InterlockedCompareExchange(&g_calibration_active, 0, 0) != 0;
 
 			/*
 			 * X-Plane keeps the plugin and PoKeys connection alive while replacing
@@ -2144,30 +2337,21 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 					trim_acceleration_deadline = 0;
 					cancel_trim_brake_ramp(&trim_brake_ramp);
 					if (throttle_test_stage != THROTTLE_TEST_IDLE)
-						abort_throttle_test(&api, device, duty_cycles,
-							&throttle_test_stage, &throttle_test_deadline,
-							"Throttle test stopped: simulator aircraft unloaded");
-					else if (throttle_left_direction != 2 ||
-						throttle_right_direction != 2 ||
-						duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] != 0U ||
-						duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] != 0U)
+						abort_throttle_test(&api, device, duty_cycles, &throttle_test_stage, &throttle_test_deadline, "Throttle test stopped: simulator aircraft unloaded");
+					else if (throttle_left_direction != 2 || throttle_right_direction != 2 || duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] != 0U || duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] != 0U)
 						stop_throttle_motors(&api, device, duty_cycles);
 					throttle_left_direction = 2;
 					throttle_right_direction = 2;
 					throttle_sync_correction = 0.0f;
-					if (trim_applied_direction != 2 ||
-						duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
-						stop_trim_motor(&api, device, duty_cycles, 0,
-							&trim_applied_direction);
-					if (speedbrake_deadline != 0 ||
-						duty_cycles[SPEEDBRAKE_PWM_CHANNEL] != 0U)
+					if (trim_applied_direction != 2 || duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
+						stop_trim_motor(&api, device, duty_cycles, 0, &trim_applied_direction);
+					if (speedbrake_deadline != 0 || duty_cycles[SPEEDBRAKE_PWM_CHANNEL] != 0U)
 						stop_speedbrake_motor(&api, device, duty_cycles);
 					speedbrake_deadline = 0;
 					if (duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] != 0U)
 					{
 						duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] = 0U;
-						pwm_update(&api, device, duty_cycles,
-							"disabling trim indicator while no aircraft is loaded");
+						pwm_update(&api, device, duty_cycles, "disabling trim indicator while no aircraft is loaded");
 					}
 					trim_indicator_applied = UINT32_MAX;
 					minmax_feedback_filter_reset(&trim_feedback_filter);
@@ -2186,98 +2370,97 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 			else
 			{
 				simulator_controls_active_applied = 1;
-			if (api.analog_get_array(device, raw) == PK_OK)
-			{
-				uint32_t trim_position = minmax_feedback_filter_add(&trim_feedback_filter, 4095U - (raw[3] > 4095U ? 4095U : raw[3]));
-				throttle_left_position = minmax_feedback_filter_add(&throttle_left_feedback_filter,	4095U - (raw[0] > 4095U ? 4095U : raw[0]));
-				throttle_right_position = minmax_feedback_filter_add(&throttle_right_feedback_filter, 4095U - (raw[1] > 4095U ? 4095U : raw[1]));
-				levers_update(raw);
-				process_trim_outputs(&api, device, duty_cycles, trim_position, &trim_indicator_applied, &trim_applied_direction, &trim_pending_direction, &trim_direction_deadline, &trim_acceleration_deadline, &trim_brake_ramp);
-				process_throttle_test(&api, device, duty_cycles, throttle_left_position, throttle_right_position, &throttle_test_stage, &throttle_test_deadline);
-				if (throttle_test_stage == THROTTLE_TEST_IDLE)
-					process_throttle_follow(&api, device, duty_cycles, throttle_left_position, throttle_right_position, &throttle_left_direction, &throttle_right_direction, &throttle_sync_correction);
+				if (api.analog_get_array(device, raw) == PK_OK)
+				{
+					uint32_t raw_trim = raw[3] > 4095U ? 4095U : raw[3];
+					uint32_t inverted_trim = 4095U - raw_trim;
+					uint32_t trim_position = minmax_feedback_filter_add(&trim_feedback_filter, inverted_trim);
+					uint32_t trace_raw_trim;
+					uint32_t trace_inverted_trim;
+					uint32_t trace_filtered_trim;
+					(void)trim_trace_hysteresis_update(&raw_trim_trace, raw_trim, TRIM_TRACE_ADC_HYSTERESIS, &trace_raw_trim);
+					(void)trim_trace_hysteresis_update(&inverted_trim_trace, inverted_trim, TRIM_TRACE_ADC_HYSTERESIS, &trace_inverted_trim);
+					(void)trim_trace_hysteresis_update(&filtered_trim_trace, trim_position, TRIM_TRACE_ADC_HYSTERESIS, &trace_filtered_trim);
+					TRIM_TRACE("PoKeys analogue read raw_trim=%u inverted_trim=%u filtered_trim=%u filter_initialised=%d", trace_raw_trim, trace_inverted_trim, trace_filtered_trim, trim_feedback_filter.initialised);
+					throttle_left_position = minmax_feedback_filter_add(&throttle_left_feedback_filter, 4095U - (raw[0] > 4095U ? 4095U : raw[0]));
+					throttle_right_position = minmax_feedback_filter_add(&throttle_right_feedback_filter, 4095U - (raw[1] > 4095U ? 4095U : raw[1]));
+					levers_update(raw);
+					process_trim_outputs(&api, device, duty_cycles, trim_position, &trim_indicator_applied, &trim_applied_direction, &trim_pending_direction, &trim_direction_deadline, &trim_acceleration_deadline, &trim_brake_ramp);
+					process_throttle_test(&api, device, duty_cycles, throttle_left_position, throttle_right_position, &throttle_test_stage, &throttle_test_deadline);
+					if (throttle_test_stage == THROTTLE_TEST_IDLE)
+						process_throttle_follow(&api, device, duty_cycles, throttle_left_position, throttle_right_position, &throttle_left_direction, &throttle_right_direction, &throttle_sync_correction);
+					else
+					{
+						/* Test stages own the same bridges and always have priority. */
+						throttle_left_direction = 3;
+						throttle_right_direction = 3;
+						throttle_sync_correction = 0.0f;
+					}
+					request_automatic_speedbrake_pull_down(4095U - (raw[2] > 4095U ? 4095U : raw[2]), speedbrake_deadline != 0, &automatic_pull_down_armed);
+					read_failures = 0;
+				}
 				else
 				{
-					/* Test stages own the same bridges and always have priority. */
-					throttle_left_direction = 3;
-					throttle_right_direction = 3;
+					/* Never leave a powered closed-loop motor without feedback. */
+					trim_pending_direction = 0;
+					trim_direction_deadline = 0;
+					trim_acceleration_deadline = 0;
+					cancel_trim_brake_ramp(&trim_brake_ramp);
+					minmax_feedback_filter_reset(&trim_feedback_filter);
+					minmax_feedback_filter_reset(&throttle_left_feedback_filter);
+					minmax_feedback_filter_reset(&throttle_right_feedback_filter);
+					if (trim_applied_direction != 2 || duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
+						stop_trim_motor(&api, device, duty_cycles, 0, &trim_applied_direction);
+					if (throttle_left_direction != 2 || throttle_right_direction != 2 || duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] != 0U || duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] != 0U)
+						stop_throttle_motors(&api, device, duty_cycles);
+					throttle_left_direction = 2;
+					throttle_right_direction = 2;
 					throttle_sync_correction = 0.0f;
+					if (++read_failures == 3U)
+					{
+						log_write("Three consecutive PoKeys analogue reads failed; lever display is unavailable");
+						levers_set_unavailable();
+						if (throttle_test_stage != THROTTLE_TEST_IDLE)
+							abort_throttle_test(&api, device, duty_cycles, &throttle_test_stage, &throttle_test_deadline, "Throttle test stopped: analogue feedback unavailable");
+					}
 				}
-				request_automatic_speedbrake_pull_down(4095U - (raw[2] > 4095U ? 4095U : raw[2]), speedbrake_deadline != 0, &automatic_pull_down_armed);
-				read_failures = 0;
-			}
-			else 
-			{
-				/* Never leave a powered closed-loop motor without feedback. */
-				trim_pending_direction = 0;
-				trim_direction_deadline = 0;
-				trim_acceleration_deadline = 0;
-				cancel_trim_brake_ramp(&trim_brake_ramp);
-				minmax_feedback_filter_reset(&trim_feedback_filter);
-				minmax_feedback_filter_reset(&throttle_left_feedback_filter);
-				minmax_feedback_filter_reset(&throttle_right_feedback_filter);
-				if (trim_applied_direction != 2 ||
-					duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
-					stop_trim_motor(&api, device, duty_cycles, 0,
-						&trim_applied_direction);
-				if (throttle_left_direction != 2 ||
-					throttle_right_direction != 2 ||
-					duty_cycles[THROTTLE_LEFT_PWM_CHANNEL] != 0U ||
-					duty_cycles[THROTTLE_RIGHT_PWM_CHANNEL] != 0U)
-					stop_throttle_motors(&api, device, duty_cycles);
-				throttle_left_direction = 2;
-				throttle_right_direction = 2;
-				throttle_sync_correction = 0.0f;
-				if (++read_failures == 3U) 
-				{
-					log_write("Three consecutive PoKeys analogue reads failed; lever display is unavailable");
-					levers_set_unavailable();
-					if (throttle_test_stage != THROTTLE_TEST_IDLE)
-						abort_throttle_test(&api, device, duty_cycles, &throttle_test_stage, &throttle_test_deadline, "Throttle test stopped: analogue feedback unavailable");
-				}
-			}
 
-			/*
-			 * Read every configured switch in one device transaction. The former
-			 * nine PK_DigitalIOGetSingle calls serialized nine TCP round trips in
-			 * every governor pass, delaying the next paired analogue/PWM update.
-			 */
-			if (api.digital_io_get(device) == PK_OK)
-			{
-				parking_brake_input_update(device->Pins[PARKING_BRAKE_SWITCH_PIN].DigitalValueGet != 0U);
-				toga_inputs_update(device->Pins[LEFT_TOGA_SWITCH_PIN].DigitalValueGet != 0U,
-					device->Pins[RIGHT_TOGA_SWITCH_PIN].DigitalValueGet != 0U);
-				at_disconnect_inputs_update(device->Pins[LEFT_AT_DISCONNECT_SWITCH_PIN].DigitalValueGet != 0U,
-					device->Pins[RIGHT_AT_DISCONNECT_SWITCH_PIN].DigitalValueGet != 0U);
-				fuel_cutoff_inputs_update(device->Pins[LEFT_FUEL_CUTOFF_SWITCH_PIN].DigitalValueGet != 0U,
-					device->Pins[RIGHT_FUEL_CUTOFF_SWITCH_PIN].DigitalValueGet != 0U);
-				trim_cutout_inputs_update(device->Pins[ELECTRIC_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet != 0U,
-					device->Pins[AUTOPILOT_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet != 0U);
-				digital_read_failures = 0;
+				/*
+				 * Read every configured switch in one device transaction. The former
+				 * nine PK_DigitalIOGetSingle calls serialized nine TCP round trips in
+				 * every governor pass, delaying the next paired analogue/PWM update.
+				 */
+				if (api.digital_io_get(device) == PK_OK)
+				{
+					TRIM_TRACE("PoKeys digital read pin7_raw=%u pin9_raw=%u pin27_get=%u pin28_get=%u pin31_get=%u pin27_set=%u pin28_set=%u pin31_set=%u", device->Pins[ELECTRIC_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet, device->Pins[AUTOPILOT_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet, device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueGet, device->Pins[TRIM_ENABLE_PIN].DigitalValueGet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueGet, device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueSet, device->Pins[TRIM_ENABLE_PIN].DigitalValueSet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueSet);
+					parking_brake_input_update(device->Pins[PARKING_BRAKE_SWITCH_PIN].DigitalValueGet != 0U);
+					toga_inputs_update(device->Pins[LEFT_TOGA_SWITCH_PIN].DigitalValueGet != 0U, device->Pins[RIGHT_TOGA_SWITCH_PIN].DigitalValueGet != 0U);
+					at_disconnect_inputs_update(device->Pins[LEFT_AT_DISCONNECT_SWITCH_PIN].DigitalValueGet != 0U, device->Pins[RIGHT_AT_DISCONNECT_SWITCH_PIN].DigitalValueGet != 0U);
+					fuel_cutoff_inputs_update(device->Pins[LEFT_FUEL_CUTOFF_SWITCH_PIN].DigitalValueGet != 0U, device->Pins[RIGHT_FUEL_CUTOFF_SWITCH_PIN].DigitalValueGet != 0U);
+					trim_cutout_inputs_update(device->Pins[ELECTRIC_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet != 0U, device->Pins[AUTOPILOT_TRIM_NORMAL_SWITCH_PIN].DigitalValueGet != 0U);
+					digital_read_failures = 0;
+				}
+				else if (++digital_read_failures == 3U)
+				{
+					parking_brake_input_set_unavailable();
+					toga_inputs_set_unavailable();
+					at_disconnect_inputs_set_unavailable();
+					fuel_cutoff_inputs_set_unavailable();
+					trim_cutout_inputs_set_unavailable();
+					log_write("Three consecutive PoKeys digital input reads failed; switch inputs are unavailable");
+				}
 			}
-			else if (++digital_read_failures == 3U)
-			{
-				parking_brake_input_set_unavailable();
-				toga_inputs_set_unavailable();
-				at_disconnect_inputs_set_unavailable();
-				fuel_cutoff_inputs_set_unavailable();
-				trim_cutout_inputs_set_unavailable();
-				log_write("Three consecutive PoKeys digital input reads failed; switch inputs are unavailable");
-			}
-			}
-			if (reconnect_for_protocol || reconnect_for_variant ||
-				++health_counter >= POKEYS_HEALTH_INTERVAL_CYCLES)
+			if (reconnect_for_protocol || reconnect_for_variant || ++health_counter >= POKEYS_HEALTH_INTERVAL_CYCLES)
 			{
 				if (reconnect_for_protocol || reconnect_for_variant)
 				{
-					log_write("Refreshing PoKeys connection for%s%s configuration change",
-						reconnect_for_variant ? " TQ variant" : "",
-						reconnect_for_protocol ? " network protocol" : "");
+					log_write("Refreshing PoKeys connection for%s%s configuration change", reconnect_for_variant ? " TQ variant" : "", reconnect_for_protocol ? " network protocol" : "");
 				}
 				else
 				{
 					health_counter = 0;
-					if (api.device_data_get(device) == PK_OK) continue;
+					if (api.device_data_get(device) == PK_OK)
+						continue;
 					log_write("PoKeys connection health check failed; discovery will resume");
 				}
 				stop_throttle_motors(&api, device, duty_cycles);
@@ -2285,12 +2468,10 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				stop_speedbrake_motor(&api, device, duty_cycles);
 				duty_cycles[PARKING_BRAKE_PWM_CHANNEL] = 0U;
 				duty_cycles[TRIM_INDICATOR_PWM_CHANNEL] = 0U;
-				pwm_update(&api, device, duty_cycles,
-					"making actuator outputs safe before disconnect");
+				pwm_update(&api, device, duty_cycles, "making actuator outputs safe before disconnect");
 				/* Change topology only after the old bridge has been made safe. */
 				if (reconnect_for_variant)
-					g_config.trim_motor_variant = (uint32_t)
-						InterlockedCompareExchange(&g_trim_motor_variant_requested, 0, 0);
+					g_config.trim_motor_variant = (uint32_t)InterlockedCompareExchange(&g_trim_motor_variant_requested, 0, 0);
 				throttle_test_stage = THROTTLE_TEST_IDLE;
 				throttle_test_deadline = 0;
 				InterlockedExchange(&g_throttle_test_running, 0);
@@ -2337,41 +2518,40 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 				at_disconnect_inputs_set_disconnected();
 				fuel_cutoff_inputs_set_disconnected();
 				trim_cutout_inputs_set_disconnected();
-				status_set_disconnected((reconnect_for_protocol || reconnect_for_variant) ?
-					"PoKeys configuration changed; reconnecting" :
-					"Connection lost; discovery will retry");
+				status_set_disconnected((reconnect_for_protocol || reconnect_for_variant) ? "PoKeys configuration changed; reconnecting" : "Connection lost; discovery will retry");
 				reconnect_for_protocol = 0;
 				reconnect_for_variant = 0;
 				health_counter = 0;
 			}
-		} 
-		else 
+		}
+		else
 		{
 			char detail[128];
-			snprintf(detail, sizeof(detail), "No matching TQ found; retrying in %u ms",	g_config.retry_delay_ms);
+			snprintf(detail, sizeof(detail), "No matching TQ found; retrying in %u ms", g_config.retry_delay_ms);
 			status_set_disconnected(detail);
 			log_write("No matching CFY Pokeys device found; retrying in %u ms", g_config.retry_delay_ms);
-			if (WaitForSingleObject(g_stop_event, g_config.retry_delay_ms) == WAIT_OBJECT_0) break;
+			if (WaitForSingleObject(g_stop_event, g_config.retry_delay_ms) == WAIT_OBJECT_0)
+				break;
 		}
 	}
-	if (device) 
+	if (device)
 	{
 		/*
 		 * XPluginStop normally waits for a completed release before signalling
 		 * this thread. Keep a direct, bounded fallback here so every worker exit
 		 * also leaves the physical parking-brake interlock retracted.
 		 */
-		if (!InterlockedCompareExchange(&g_parking_brake_release_complete, 0, 0)) 
+		if (!InterlockedCompareExchange(&g_parking_brake_release_complete, 0, 0))
 		{
 			duty_cycles[PARKING_BRAKE_PWM_CHANNEL] = PARKING_BRAKE_RELEASE_DUTY;
-			if (pwm_update(&api, device, duty_cycles, "releasing the parking-brake interlock at shutdown")) 
+			if (pwm_update(&api, device, duty_cycles, "releasing the parking-brake interlock at shutdown"))
 			{
 				Sleep(PARKING_BRAKE_PULSE_MS);
 				duty_cycles[PARKING_BRAKE_PWM_CHANNEL] = 0U;
-				if (pwm_update(&api, device, duty_cycles,"ending the shutdown parking-brake release pulse")) 
+				if (pwm_update(&api, device, duty_cycles, "ending the shutdown parking-brake release pulse"))
 				{
 					InterlockedExchange(&g_parking_brake_release_complete, 1);
-					InterlockedExchange(&g_parking_brake_state,	POKEYS_PARKING_BRAKE_RELEASED);
+					InterlockedExchange(&g_parking_brake_state, POKEYS_PARKING_BRAKE_RELEASED);
 					log_write("Parking-brake interlock retracted by shutdown fallback");
 				}
 			}
@@ -2411,15 +2591,17 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 /**********************************************************************************/
 int pokeys_thread_start(const PluginConfig* config)
 {
-	if (g_thread) return (1);
-	
+	if (g_thread)
+		return (1);
+
 	g_config = *config;
+	InterlockedExchange(&g_enhanced_logging, config->enhanced_logging ? 1 : 0);
+	InterlockedIncrement(&g_trim_trace_generation);
 	InterlockedExchange(&g_network_use_udp, config->network_use_udp ? 1 : 0);
 	InterlockedExchange(&g_network_protocol_change_requested, 0);
-	InterlockedExchange(&g_trim_motor_variant_requested,
-		(LONG)config->trim_motor_variant);
+	InterlockedExchange(&g_trim_motor_variant_requested, (LONG)config->trim_motor_variant);
 	InterlockedExchange(&g_trim_motor_variant_change_requested, 0);
-	
+
 	status_set_disconnected("Waiting for PoKeys connection thread");
 	memset(&g_levers, 0, sizeof(g_levers));
 	memset(&g_parking_brake_input, 0, sizeof(g_parking_brake_input));
@@ -2446,7 +2628,7 @@ int pokeys_thread_start(const PluginConfig* config)
 	InterlockedExchange(&g_trim_motor_enabled, 0);
 	InterlockedExchange(&g_trim_manual_enabled, 0);
 	InterlockedExchange(&g_trim_manual_direction, 0);
-	InterlockedExchange(&g_trim_min_speed, 0);
+	/* Retain the calibration value published before initial worker startup and across plugin enable cycles. */
 	InterlockedExchange(&g_trim_motor_running, 0);
 	InterlockedExchange(&g_trim_indicator_target_position, 0);
 	InterlockedExchange(&g_trim_indicator_simulator_owned, 0);
@@ -2462,12 +2644,12 @@ int pokeys_thread_start(const PluginConfig* config)
 	memset(g_throttle_manual_monitor, 0, sizeof(g_throttle_manual_monitor));
 	throttle_test_status_set("Throttle test ready");
 	g_stop_event = CreateEventA(NULL, TRUE, FALSE, NULL);
-	
-	if (!g_stop_event) 
+
+	if (!g_stop_event)
 		return (0);
-	
+
 	g_thread = CreateThread(NULL, 0, connection_thread, NULL, 0, NULL);
-	if (!g_thread) 
+	if (!g_thread)
 	{
 		CloseHandle(g_stop_event);
 		g_stop_event = NULL;
@@ -2488,19 +2670,19 @@ int pokeys_thread_stop(void)
 	InterlockedExchange(&g_trim_manual_enabled, 0);
 	InterlockedExchange(&g_trim_manual_direction, 0);
 	InterlockedExchange(&g_throttle_follow_enabled, 0);
-	if (!g_thread) 
-		return(1);
-	
+	if (!g_thread)
+		return (1);
+
 	SetEvent(g_stop_event);
-	
+
 	wait_result = WaitForSingleObject(g_thread, g_config.discovery_timeout_ms);
-	if (wait_result == WAIT_TIMEOUT) 
+	if (wait_result == WAIT_TIMEOUT)
 	{
-		log_write("Pokeys discovery did not stop within %u ms; cancelling synchronous I/O",	g_config.discovery_timeout_ms);
+		log_write("Pokeys discovery did not stop within %u ms; cancelling synchronous I/O", g_config.discovery_timeout_ms);
 		CancelSynchronousIo(g_thread);
 		wait_result = WaitForSingleObject(g_thread, 2000);
 	}
-	if (wait_result != WAIT_OBJECT_0) 
+	if (wait_result != WAIT_OBJECT_0)
 	{
 		/*
 		 * Never terminate a hardware worker asynchronously. Doing so can leave an
@@ -2543,11 +2725,18 @@ void pokeys_set_network_protocol(int use_udp)
 void pokeys_set_trim_motor_variant(uint32_t variant)
 {
 	LONG requested;
-	if (variant < 3U || variant > 5U) return;
+	if (variant < 3U || variant > 5U)
+		return;
 	requested = (LONG)variant;
-	if (InterlockedExchange(&g_trim_motor_variant_requested, requested) !=
-		requested)
+	if (InterlockedExchange(&g_trim_motor_variant_requested, requested) != requested)
 		InterlockedExchange(&g_trim_motor_variant_change_requested, 1);
+}
+
+void pokeys_set_enhanced_logging(int enabled)
+{
+	InterlockedExchange(&g_enhanced_logging, enabled ? 1 : 0);
+	InterlockedIncrement(&g_trim_trace_generation);
+	log_write("Enhanced logging %s for PoKeys hardware control", enabled ? "enabled" : "disabled");
 }
 
 /**********************************************************************************/
@@ -2555,7 +2744,7 @@ void pokeys_set_trim_motor_variant(uint32_t variant)
 /**********************************************************************************/
 void pokeys_get_status(PokeysStatus* status)
 {
-	if (!status) 
+	if (!status)
 		return;
 	AcquireSRWLockShared(&g_status_lock);
 	*status = g_status;
@@ -2564,7 +2753,7 @@ void pokeys_get_status(PokeysStatus* status)
 
 void pokeys_get_lever_positions(PokeysLeverPositions* positions)
 {
-	if (!positions) 
+	if (!positions)
 		return;
 	AcquireSRWLockShared(&g_lever_lock);
 	*positions = g_levers;
@@ -2573,7 +2762,7 @@ void pokeys_get_lever_positions(PokeysLeverPositions* positions)
 
 void pokeys_get_parking_brake_input(PokeysParkingBrakeInput* input)
 {
-	if (!input) 
+	if (!input)
 		return;
 	AcquireSRWLockShared(&g_parking_brake_input_lock);
 	*input = g_parking_brake_input;
@@ -2582,7 +2771,7 @@ void pokeys_get_parking_brake_input(PokeysParkingBrakeInput* input)
 
 void pokeys_get_toga_inputs(PokeysTogaInputs* inputs)
 {
-	if (!inputs) 
+	if (!inputs)
 		return;
 	AcquireSRWLockShared(&g_toga_input_lock);
 	*inputs = g_toga_inputs;
@@ -2591,7 +2780,7 @@ void pokeys_get_toga_inputs(PokeysTogaInputs* inputs)
 
 void pokeys_get_at_disconnect_inputs(PokeysAtDisconnectInputs* inputs)
 {
-	if (!inputs) 
+	if (!inputs)
 		return;
 	AcquireSRWLockShared(&g_at_disconnect_input_lock);
 	*inputs = g_at_disconnect_inputs;
@@ -2600,7 +2789,7 @@ void pokeys_get_at_disconnect_inputs(PokeysAtDisconnectInputs* inputs)
 
 void pokeys_get_fuel_cutoff_inputs(PokeysFuelCutoffInputs* inputs)
 {
-	if (!inputs) 
+	if (!inputs)
 		return;
 	AcquireSRWLockShared(&g_fuel_cutoff_input_lock);
 	*inputs = g_fuel_cutoff_inputs;
@@ -2609,11 +2798,16 @@ void pokeys_get_fuel_cutoff_inputs(PokeysFuelCutoffInputs* inputs)
 
 void pokeys_get_trim_cutout_inputs(PokeysTrimCutoutInputs* inputs)
 {
-	if (!inputs) 
+	TRIM_TRACE("ENTER pokeys_get_trim_cutout_inputs output=%p", (void*)inputs);
+	if (!inputs)
+	{
+		TRIM_TRACE("EXIT pokeys_get_trim_cutout_inputs reason=null_output");
 		return;
+	}
 	AcquireSRWLockShared(&g_trim_cutout_input_lock);
 	*inputs = g_trim_cutout_inputs;
 	ReleaseSRWLockShared(&g_trim_cutout_input_lock);
+	TRIM_TRACE("EXIT pokeys_get_trim_cutout_inputs connected=%d valid=%d electric_normal=%d autopilot_normal=%d sequence=%llu", inputs->connected, inputs->valid, inputs->electric_normal, inputs->autopilot_normal, (unsigned long long)inputs->sequence);
 }
 
 void pokeys_set_parking_brake_indicator(int illuminated)
@@ -2660,50 +2854,51 @@ int pokeys_is_flight_detent_retracted(void)
 
 void pokeys_set_speedbrake_closed_position(uint32_t position)
 {
-	if (position > 4095U) position = 4095U;
+	if (position > 4095U)
+		position = 4095U;
 	InterlockedExchange(&g_speedbrake_closed_position, (LONG)position);
 }
 
 int pokeys_speedbrake_retract_and_pull_down(void)
 {
-	if (!pokeys_is_connected()) 
-		return(0);
+	if (!pokeys_is_connected())
+		return (0);
 	InterlockedExchange(&g_speedbrake_command, SPEEDBRAKE_COMMAND_RETRACT);
-	return(1);
+	return (1);
 }
 
 int pokeys_speedbrake_push_up_and_extend(void)
 {
-	if (!pokeys_is_connected()) 
-		return(0);
+	if (!pokeys_is_connected())
+		return (0);
 	InterlockedExchange(&g_speedbrake_command, SPEEDBRAKE_COMMAND_EXTEND);
-	return(1);
+	return (1);
 }
 
 int pokeys_parking_brake_interlock_release(void)
 {
-	if (!pokeys_is_connected()) 
-		return(0);
+	if (!pokeys_is_connected())
+		return (0);
 	InterlockedExchange(&g_parking_brake_release_complete, 0);
 	InterlockedExchange(&g_parking_brake_command, PARKING_BRAKE_COMMAND_RELEASE);
-	return(1);
+	return (1);
 }
 
 int pokeys_parking_brake_interlock_set(void)
 {
-	if (!pokeys_is_connected()) 
-		return(0);
+	if (!pokeys_is_connected())
+		return (0);
 	InterlockedExchange(&g_parking_brake_release_complete, 0);
 	InterlockedExchange(&g_parking_brake_command, PARKING_BRAKE_COMMAND_SET);
-	return(1);
+	return (1);
 }
 
 int pokeys_get_parking_brake_state(void)
 {
-	if (!pokeys_is_connected()) 
-		return(POKEYS_PARKING_BRAKE_UNKNOWN);
+	if (!pokeys_is_connected())
+		return (POKEYS_PARKING_BRAKE_UNKNOWN);
 
-	return((int)InterlockedCompareExchange(&g_parking_brake_state, 0, 0));
+	return ((int)InterlockedCompareExchange(&g_parking_brake_state, 0, 0));
 }
 
 int pokeys_ensure_parking_brake_interlock_retracted(void)
@@ -2711,57 +2906,76 @@ int pokeys_ensure_parking_brake_interlock_retracted(void)
 	LONG queued_command;
 	LONG active_command;
 
-	if (!pokeys_is_connected()) 
-		return(0);
+	if (!pokeys_is_connected())
+		return (0);
 	if (InterlockedCompareExchange(&g_parking_brake_release_complete, 0, 0))
-		return(1);
+		return (1);
 
 	queued_command = InterlockedCompareExchange(&g_parking_brake_command, 0, 0);
 	active_command = InterlockedCompareExchange(&g_parking_brake_active_command, 0, 0);
 
-	if (queued_command != PARKING_BRAKE_COMMAND_RELEASE && active_command != PARKING_BRAKE_COMMAND_RELEASE) 
+	if (queued_command != PARKING_BRAKE_COMMAND_RELEASE && active_command != PARKING_BRAKE_COMMAND_RELEASE)
 	{
 		InterlockedExchange(&g_parking_brake_command, PARKING_BRAKE_COMMAND_RELEASE);
 	}
-	return(1);
+	return (1);
 }
 
 int pokeys_parking_brake_interlock_is_retracted(void)
 {
-	return(pokeys_is_connected() && InterlockedCompareExchange(&g_parking_brake_release_complete, 0, 0) != 0);
+	return (pokeys_is_connected() && InterlockedCompareExchange(&g_parking_brake_release_complete, 0, 0) != 0);
 }
 
 void pokeys_set_trim_target(uint32_t position, int enabled)
 {
-	if (position > 4095U) position = 4095U;
+	TRIM_TRACE("ENTER pokeys_set_trim_target requested_position=%u requested_enabled=%d old_position=%ld old_enabled=%ld", position, enabled, InterlockedCompareExchange(&g_trim_target_position, 0, 0), InterlockedCompareExchange(&g_trim_motor_enabled, 0, 0));
+	if (position < TRIM_POSITION_MIN)
+		position = TRIM_POSITION_MIN;
+	if (position > TRIM_POSITION_MAX)
+		position = TRIM_POSITION_MAX;
 	InterlockedExchange(&g_trim_target_position, (LONG)position);
 	InterlockedExchange(&g_trim_motor_enabled, enabled ? 1 : 0);
+	TRIM_TRACE("EXIT pokeys_set_trim_target position=%u enabled=%d", position, enabled != 0);
 }
 
 void pokeys_set_trim_manual_command(int direction, int enabled)
 {
-	if (direction < 0) direction = -1;
-	else if (direction > 0) direction = 1;
+	TRIM_TRACE("ENTER pokeys_set_trim_manual_command requested_direction=%d requested_enabled=%d old_direction=%ld old_enabled=%ld", direction, enabled, InterlockedCompareExchange(&g_trim_manual_direction, 0, 0), InterlockedCompareExchange(&g_trim_manual_enabled, 0, 0));
+	if (direction < 0)
+		direction = -1;
+	else if (direction > 0)
+		direction = 1;
 	InterlockedExchange(&g_trim_manual_direction, (LONG)direction);
 	InterlockedExchange(&g_trim_manual_enabled, enabled ? 1 : 0);
+	TRIM_TRACE("EXIT pokeys_set_trim_manual_command direction=%d enabled=%d", direction, enabled != 0);
 }
 
 void pokeys_set_trim_indicator_target(uint32_t position, int simulator_owned)
 {
-	if (position > 4095U) position = 4095U;
+	TRIM_TRACE("ENTER pokeys_set_trim_indicator_target requested_position=%u requested_owned=%d old_position=%ld old_owned=%ld", position, simulator_owned, InterlockedCompareExchange(&g_trim_indicator_target_position, 0, 0), InterlockedCompareExchange(&g_trim_indicator_simulator_owned, 0, 0));
+	if (position > 4095U)
+		position = 4095U;
 	InterlockedExchange(&g_trim_indicator_target_position, (LONG)position);
 	InterlockedExchange(&g_trim_indicator_simulator_owned, simulator_owned ? 1 : 0);
+	TRIM_TRACE("EXIT pokeys_set_trim_indicator_target position=%u simulator_owned=%d", position, simulator_owned != 0);
 }
 
 void pokeys_set_trim_min_speed(uint32_t percent)
 {
-	if (percent > 100U) percent = 100U;
+	TRIM_TRACE("ENTER pokeys_set_trim_min_speed requested=%u old=%ld", percent, InterlockedCompareExchange(&g_trim_min_speed, 0, 0));
+	if (percent > 100U)
+		percent = 100U;
 	InterlockedExchange(&g_trim_min_speed, (LONG)percent);
+	TRIM_TRACE("EXIT pokeys_set_trim_min_speed percent=%u", percent);
 }
 
 int pokeys_trim_motor_is_running(void)
 {
-	return((int)InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
+	int running;
+	TRIM_TRACE("ENTER pokeys_trim_motor_is_running");
+	running = (int)InterlockedCompareExchange(&g_trim_motor_running, 0, 0);
+	TRIM_TRACE("EXIT pokeys_trim_motor_is_running result=%d", running);
+	return (running);
 }
 
 int pokeys_take_throttle_manual_override(void)
@@ -2769,25 +2983,18 @@ int pokeys_take_throttle_manual_override(void)
 	return (int)InterlockedExchange(&g_throttle_manual_override_mask, 0);
 }
 
-void pokeys_set_throttle_follow_targets(uint32_t left_position,
-	uint32_t right_position, uint32_t left_min_speed,
-	uint32_t right_min_speed, int enabled)
+void pokeys_set_throttle_follow_targets(uint32_t left_position, uint32_t right_position, uint32_t left_min_speed, uint32_t right_min_speed, int enabled)
 {
-	if (left_position > 4095U) left_position = 4095U;
-	if (right_position > 4095U) right_position = 4095U;
-	if (left_min_speed > 49U) left_min_speed = 49U;
-	if (right_min_speed > 49U) right_min_speed = 49U;
+	if (left_position > 4095U)
+		left_position = 4095U;
+	if (right_position > 4095U)
+		right_position = 4095U;
+	if (left_min_speed > 49U)
+		left_min_speed = 49U;
+	if (right_min_speed > 49U)
+		right_min_speed = 49U;
 	/* Avoid contending with the worker when the complete command is unchanged. */
-	if (InterlockedCompareExchange(&g_throttle_left_target, 0, 0) ==
-		(LONG)left_position &&
-		InterlockedCompareExchange(&g_throttle_right_target, 0, 0) ==
-		(LONG)right_position &&
-		InterlockedCompareExchange(&g_throttle_left_min_speed, 0, 0) ==
-		(LONG)left_min_speed &&
-		InterlockedCompareExchange(&g_throttle_right_min_speed, 0, 0) ==
-		(LONG)right_min_speed &&
-		InterlockedCompareExchange(&g_throttle_follow_enabled, 0, 0) ==
-		(enabled ? 1L : 0L))
+	if (InterlockedCompareExchange(&g_throttle_left_target, 0, 0) == (LONG)left_position && InterlockedCompareExchange(&g_throttle_right_target, 0, 0) == (LONG)right_position && InterlockedCompareExchange(&g_throttle_left_min_speed, 0, 0) == (LONG)left_min_speed && InterlockedCompareExchange(&g_throttle_right_min_speed, 0, 0) == (LONG)right_min_speed && InterlockedCompareExchange(&g_throttle_follow_enabled, 0, 0) == (enabled ? 1L : 0L))
 		return;
 	/* Mark publication in progress before changing either side of the pair. */
 	InterlockedIncrement(&g_throttle_follow_command_sequence);
@@ -2802,10 +3009,8 @@ void pokeys_set_throttle_follow_targets(uint32_t left_position,
 
 void pokeys_set_throttle_test_limits(uint32_t left_min, uint32_t left_max, uint32_t right_min, uint32_t right_max)
 {
-	int valid = left_max <= 4095U && right_max <= 4095U &&
-		left_max > left_min && left_max - left_min >= 100U &&
-		right_max > right_min && right_max - right_min >= 100U;
-	
+	int valid = left_max <= 4095U && right_max <= 4095U && left_max > left_min && left_max - left_min >= 100U && right_max > right_min && right_max - right_min >= 100U;
+
 	InterlockedExchange(&g_throttle_left_min, (LONG)left_min);
 	InterlockedExchange(&g_throttle_left_max, (LONG)left_max);
 	InterlockedExchange(&g_throttle_right_min, (LONG)right_min);
@@ -2821,21 +3026,22 @@ void pokeys_set_throttle_test_limits(uint32_t left_min, uint32_t left_max, uint3
 int pokeys_start_throttle_test(void)
 {
 	if (!pokeys_is_connected() || InterlockedCompareExchange(&g_throttle_limits_valid, 0, 0) == 0 || InterlockedCompareExchange(&g_throttle_test_running, 0, 0) != 0)
-		return(0);
+		return (0);
 	if (InterlockedCompareExchange(&g_throttle_test_requested, 1, 0) != 0)
-		return(0);
+		return (0);
 	throttle_test_status_set("Throttle test queued");
-	return(1);
+	return (1);
 }
 
 int pokeys_is_throttle_test_running(void)
 {
-	return(InterlockedCompareExchange(&g_throttle_test_requested, 0, 0) != 0 || InterlockedCompareExchange(&g_throttle_test_running, 0, 0) != 0);
+	return (InterlockedCompareExchange(&g_throttle_test_requested, 0, 0) != 0 || InterlockedCompareExchange(&g_throttle_test_running, 0, 0) != 0);
 }
 
 void pokeys_get_throttle_test_status(char* status, uint32_t status_size)
 {
-	if (!status || status_size == 0U) return;
+	if (!status || status_size == 0U)
+		return;
 	AcquireSRWLockShared(&g_throttle_test_status_lock);
 	strncpy_s(status, status_size, g_throttle_test_status, _TRUNCATE);
 	ReleaseSRWLockShared(&g_throttle_test_status_lock);
