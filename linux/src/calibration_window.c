@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <Windows.h>
+#include "platform.h"
 #include <GL/gl.h>
 
 /* X-Plane SDK include files */

@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <Windows.h>
+#include "platform.h"
 
 /* project include files*/
 #include "datastructures.h"

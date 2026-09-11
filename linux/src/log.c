@@ -12,7 +12,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <Windows.h>
+#include "platform.h"
 
 /* X-Plane SDK include files */
 #include "XPLMUtilities.h"

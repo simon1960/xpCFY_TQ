@@ -11,7 +11,9 @@
 /* standard include files */
 #include <stdio.h>
 #include <string.h>
-#include <Windows.h>
+#include "platform.h"
+#include <dlfcn.h>
+#include <stdlib.h>
 
 /* project include files */
 #include "plugin_paths.h"
@@ -20,28 +22,20 @@ static char g_plugin_directory[MAX_PATH];
 
 int plugin_paths_initialise(void)
 {
-	HMODULE module;
-	DWORD length;
+	Dl_info module;
 	char path[MAX_PATH];
 	char* separator;
 
-	/* XPLMGetPluginInfo may return a path relative to the X-Plane directory.
-	   Resolve the loaded plugin module through Windows instead so every file
-	   lookup is independent of the process working directory. */
-
-	if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)&plugin_paths_initialise, &module))
+	/* Resolve the loaded ELF module so paths never depend on X-Plane's working directory. */
+	if (!dladdr((void*)&plugin_paths_initialise, &module) || !module.dli_fname || !realpath(module.dli_fname, path))
 		return (0);
-
-	length = GetModuleFileNameA(module, path, (DWORD)sizeof(path));
-	if (length == 0 || length >= (DWORD)sizeof(path))
-		return (0);
-
-	separator = strrchr(path, '\\');
-	if (!separator)
-		separator = strrchr(path, '/');
+	separator = strrchr(path, '/');
 	if (!separator)
 		return (0);
-	*separator = '\0';
+	if (separator == path)
+		separator[1] = '\0';
+	else
+		*separator = '\0';
 	return (strcpy_s(g_plugin_directory, sizeof(g_plugin_directory), path) == 0);
 }
 
@@ -52,6 +46,6 @@ const char* plugin_directory(void)
 
 int plugin_file_path(char* destination, size_t destination_size, const char* filename)
 {
-	int count = snprintf(destination, destination_size, "%s\\%s", g_plugin_directory, filename);
+	int count = snprintf(destination, destination_size, "%s/%s", g_plugin_directory, filename);
 	return (count > 0 && (size_t)count < destination_size);
 }

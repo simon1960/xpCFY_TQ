@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <Windows.h>
+#include "platform.h"
 
 /* required X-Plane SDK include files */
 #include "XPLMDefs.h"

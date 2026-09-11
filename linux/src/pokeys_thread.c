@@ -11,7 +11,8 @@
 /* standard include files*/
 #include <string.h>
 #include <stdio.h>
-#include <Windows.h>
+#include "platform.h"
+#include <dlfcn.h>
 
 /* PoKeys SDK include file */
 #include "PoKeysLib.h"
@@ -232,7 +233,7 @@ static char g_throttle_test_status[128] = "Throttle test ready";
 /* pokeys data structure */
 typedef struct PokeysApi
 {
-	HMODULE module;
+	void* module;
 	EnumerateUsbFn enumerate_usb;
 	EnumerateNetworkFn enumerate_network;
 	ConnectIndexFn connect_index;
@@ -445,7 +446,7 @@ static int apply_flight_detent_state(PokeysApi* api, sPoKeysDevice* device, int 
 		InterlockedExchange(&g_detent_update_requested, 1);
 		if (!failure_logged)
 		{
-			log_write("Unable to %s speedbrake flight-detent lock on pin %u (result %ld)", retract ? "retract" : "engage", SPEEDBRAKE_FLIGHT_DETENT_PIN, (long)result);
+			log_write("Unable to %s speedbrake flight-detent lock on pin %u (result %d)", retract ? "retract" : "engage", SPEEDBRAKE_FLIGHT_DETENT_PIN, (long)result);
 			failure_logged = 1;
 		}
 		return (0);
@@ -721,12 +722,12 @@ static void status_set_connected(const sPoKeysDevice* device, const char* ip_add
 /**********************************************************************************/
 /* check for reqquired PoKeys API functions                                       */
 /**********************************************************************************/
-static FARPROC api_proc(HMODULE module, const char* name)
+static void* api_proc(void* module, const char* name)
 {
-	FARPROC result = GetProcAddress(module, name);
+	void* result = dlsym(module, name);
 	if (!result)
-		log_write("PoKeyslib.dll does not export %s (error %lu)", name, GetLastError());
-	return result;
+		log_write("libPoKeys.so does not export %s: %s", name, dlerror());
+	return (result);
 }
 
 /**********************************************************************************/
@@ -737,19 +738,21 @@ static int api_load(PokeysApi* api, char* error_detail, size_t error_detail_size
 	char path[MAX_PATH];
 	memset(api, 0, sizeof(*api));
 
-	if (!plugin_file_path(path, sizeof(path), "PoKeyslib.dll"))
+	if (!plugin_file_path(path, sizeof(path), "libPoKeys.so"))
 	{
-		strcpy_s(error_detail, error_detail_size, "PoKeys DLL path is too long");
+		strcpy_s(error_detail, error_detail_size, "PoKeys library path is too long");
 		return (0);
 	}
 
-	api->module = LoadLibraryA(path);
+	api->module = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+	if (!api->module)
+		api->module = dlopen("/usr/lib/libPoKeys.so", RTLD_NOW | RTLD_LOCAL);
 
 	if (!api->module)
 	{
-		DWORD error = GetLastError();
-		log_write("Unable to load %s (error %lu)", path, error);
-		snprintf(error_detail, error_detail_size, "PoKeyslib.dll load failed (Windows error %lu)", error);
+		const char* error = dlerror();
+		log_write("Unable to load %s or /usr/lib/libPoKeys.so: %s", path, error ? error : "unknown loader error");
+		snprintf(error_detail, error_detail_size, "libPoKeys.so load failed: %s", error ? error : "unknown loader error");
 		return (0);
 	}
 
@@ -769,9 +772,9 @@ static int api_load(PokeysApi* api, char* error_detail, size_t error_detail_size
 	api->pwm_update_directly = (PWMUpdateDirectlyFn)api_proc(api->module, "PK_PWMUpdateDirectly");
 	if (!api->enumerate_usb || !api->enumerate_network || !api->connect_index || !api->connect_network || !api->disconnect || !api->device_data_get || !api->pin_configuration_get || !api->pin_configuration_set || !api->analog_get_array || !api->digital_io_set || !api->digital_io_get || !api->digital_io_set_single || !api->pwm_configuration_set_directly || !api->pwm_update_directly)
 	{
-		FreeLibrary(api->module);
+		dlclose(api->module);
 		memset(api, 0, sizeof(*api));
-		strcpy_s(error_detail, error_detail_size, "PoKeyslib.dll has missing API exports");
+		strcpy_s(error_detail, error_detail_size, "libPoKeys.so has missing API exports");
 		return (0);
 	}
 	return (1);
@@ -927,28 +930,28 @@ static sPoKeysDevice* connect_usb(PokeysApi* api)
 	int32_t count = api->enumerate_usb(), index;
 	if (count < 0)
 	{
-		log_write("USB PoKeys enumeration failed with result %ld", (long)count);
+		log_write("USB PoKeys enumeration failed with result %d", (long)count);
 		return NULL;
 	}
 	if (count > 0)
-		log_write("USB discovery found %ld device(s)", (long)count);
+		log_write("USB discovery found %d device(s)", (long)count);
 	for (index = 0; index < count && WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0; ++index)
 	{
 		sPoKeysDevice* device = api->connect_index((uint32_t)index);
 		int32_t data_result;
 		if (!device)
 		{
-			log_write("Unable to connect to USB PoKeys candidate %ld", (long)index);
+			log_write("Unable to connect to USB PoKeys candidate %d", (long)index);
 			continue;
 		}
 		data_result = api->device_data_get(device);
 		if (data_result != PK_OK)
 		{
-			log_write("Unable to read USB PoKeys candidate %ld device data (result %ld)", (long)index, (long)data_result);
+			log_write("Unable to read USB PoKeys candidate %d device data (result %d)", (long)index, (long)data_result);
 			api->disconnect(device);
 			continue;
 		}
-		log_write("USB candidate %ld reports serial %u, user ID %u", (long)index, device->DeviceData.SerialNumber, device->DeviceData.UserID);
+		log_write("USB candidate %d reports serial %u, user ID %u", (long)index, device->DeviceData.SerialNumber, device->DeviceData.UserID);
 		if (device_matches(device))
 		{
 			if (!configure_analog_inputs(api, device))
@@ -987,20 +990,20 @@ static sPoKeysDevice* connect_network(PokeysApi* api)
 	count = api->enumerate_network(devices, timeout);
 	if (count < 0)
 	{
-		log_write("Network PoKeys enumeration failed with result %ld", (long)count);
+		log_write("Network PoKeys enumeration failed with result %d", (long)count);
 		return NULL;
 	}
 	if (count > 64)
 		count = 64;
 	if (count > 0)
-		log_write("Network discovery found %ld device(s)", (long)count);
+		log_write("Network discovery found %d device(s)", (long)count);
 	for (index = 0; index < count && WaitForSingleObject(g_stop_event, 0) != WAIT_OBJECT_0; ++index)
 	{
 		sPoKeysDevice* device;
 		int32_t data_result;
 		/* Discovery reports capability/default state; configuration owns the transport used to connect. */
 		devices[index].useUDP = (uint8_t)(InterlockedCompareExchange(&g_network_use_udp, 0, 0) != 0);
-		log_write("Network candidate %ld: serial %u, summary user ID %u, IP %u.%u.%u.%u, %s", (long)index, devices[index].SerialNumber, devices[index].UserID, devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3], devices[index].useUDP ? "UDP" : "TCP");
+		log_write("Network candidate %d: serial %u, summary user ID %u, IP %u.%u.%u.%u, %s", (long)index, devices[index].SerialNumber, devices[index].UserID, devices[index].IPaddress[0], devices[index].IPaddress[1], devices[index].IPaddress[2], devices[index].IPaddress[3], devices[index].useUDP ? "UDP" : "TCP");
 
 		/* The discovery summary can report UserID 0 even when DeviceDataGet reports
 		   the configured value. Only serial number is trustworthy before connect. */
@@ -1019,7 +1022,7 @@ static sPoKeysDevice* connect_network(PokeysApi* api)
 		data_result = api->device_data_get(device);
 		if (data_result != PK_OK)
 		{
-			log_write("Unable to read network PoKeys serial %u device data (result %ld)", devices[index].SerialNumber, (long)data_result);
+			log_write("Unable to read network PoKeys serial %u device data (result %d)", devices[index].SerialNumber, (long)data_result);
 			api->disconnect(device);
 			continue;
 		}
@@ -1079,12 +1082,12 @@ static int pwm_update(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycle
 	if (result == PK_OK)
 	{
 		if (trim_operation && trim_trace_changed)
-			TRIM_TRACE("EXIT pwm_update operation=%s result=%ld", operation, (long)result);
+			TRIM_TRACE("EXIT pwm_update operation=%s result=%d", operation, (int)result);
 		return (1);
 	}
-	log_write("PoKeys PWM update failed while %s (result %ld)", operation, (long)result);
+	log_write("PoKeys PWM update failed while %s (result %d)", operation, (int)result);
 	if (trim_operation)
-		TRIM_TRACE("EXIT pwm_update operation=%s result=%ld", operation, (long)result);
+		TRIM_TRACE("EXIT pwm_update operation=%s result=%d", operation, (int)result);
 	return (0);
 }
 
@@ -1242,7 +1245,7 @@ static int apply_trim_bridge(PokeysApi* api, sPoKeysDevice* device, int state)
 static void stop_trim_motor(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], int brake, int* applied_direction)
 {
 	int bridge_state = brake ? 0 : 2;
-	TRIM_TRACE("ENTER stop_trim_motor brake=%d bridge_state=%d applied_direction=%d motor_duty=%u running=%ld", brake, bridge_state, *applied_direction, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
+	TRIM_TRACE("ENTER stop_trim_motor brake=%d bridge_state=%d applied_direction=%d motor_duty=%u running=%d", brake, bridge_state, *applied_direction, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
 	if (duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != 0U)
 	{
 		duty_cycles[TRIM_MOTOR_PWM_CHANNEL] = 0U;
@@ -1260,12 +1263,12 @@ static void stop_trim_motor(PokeysApi* api, sPoKeysDevice* device, uint32_t duty
 		}
 	}
 	InterlockedExchange(&g_trim_motor_running, 0);
-	TRIM_TRACE("EXIT stop_trim_motor applied_direction=%d motor_duty=%u running=%ld", *applied_direction, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
+	TRIM_TRACE("EXIT stop_trim_motor applied_direction=%d motor_duty=%u running=%d", *applied_direction, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
 }
 
 static void cancel_trim_brake_ramp(TrimBrakeRamp* ramp)
 {
-	TRIM_TRACE("ENTER cancel_trim_brake_ramp active=%d next_step=%llu target=%ld manual_mode=%d", ramp->active, (unsigned long long)ramp->next_step_at, ramp->target_at_start, ramp->manual_mode);
+	TRIM_TRACE("ENTER cancel_trim_brake_ramp active=%d next_step=%llu target=%d manual_mode=%d", ramp->active, (unsigned long long)ramp->next_step_at, ramp->target_at_start, ramp->manual_mode);
 	ramp->active = 0;
 	ramp->next_step_at = 0;
 	TRIM_TRACE("EXIT cancel_trim_brake_ramp active=%d next_step=%llu", ramp->active, (unsigned long long)ramp->next_step_at);
@@ -1282,7 +1285,7 @@ static uint32_t trim_start_ramp_duty(uint32_t current_duty, uint32_t requested_d
 {
 	uint32_t minimum_duty = (uint32_t)minimum_speed * 5000U;
 	uint32_t next_duty;
-	TRIM_TRACE("ENTER trim_start_ramp_duty current=%u requested=%u minimum_speed=%ld minimum_duty=%u next_step=%llu", current_duty, requested_duty, minimum_speed, minimum_duty, (unsigned long long)*next_step_at);
+	TRIM_TRACE("ENTER trim_start_ramp_duty current=%u requested=%u minimum_speed=%d minimum_duty=%u next_step=%llu", current_duty, requested_duty, minimum_speed, minimum_duty, (unsigned long long)*next_step_at);
 
 	if (requested_duty <= current_duty)
 	{
@@ -1322,7 +1325,7 @@ static void progressively_brake_trim_motor(PokeysApi* api, sPoKeysDevice* device
 	ULONGLONG now = GetTickCount64();
 	uint32_t current_duty = duty_cycles[TRIM_MOTOR_PWM_CHANNEL];
 	uint32_t next_duty;
-	TRIM_TRACE("ENTER progressively_brake_trim_motor current_duty=%u applied_direction=%d ramp_active=%d ramp_next=%llu ramp_target=%ld ramp_manual=%d target=%ld manual_mode=%d", current_duty, *applied_direction, ramp->active, (unsigned long long)ramp->next_step_at, ramp->target_at_start, ramp->manual_mode, target, manual_mode);
+	TRIM_TRACE("ENTER progressively_brake_trim_motor current_duty=%u applied_direction=%d ramp_active=%d ramp_next=%llu ramp_target=%d ramp_manual=%d target=%d manual_mode=%d", current_duty, *applied_direction, ramp->active, (unsigned long long)ramp->next_step_at, ramp->target_at_start, ramp->manual_mode, target, manual_mode);
 
 	if (current_duty == 0U)
 	{
@@ -1397,7 +1400,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	(void)trim_trace_hysteresis_update(&current_position_trace, current_position, TRIM_TRACE_ADC_HYSTERESIS, &trace_current_position);
 	trace_error = target - (LONG)trace_current_position;
 	trace_distance = trace_error < 0 ? -trace_error : trace_error;
-	TRIM_TRACE("ENTER process_trim_outputs variant=%u current=%u target=%ld enabled=%ld manual_enabled=%ld manual_direction=%ld minimum_speed=%ld indicator_target=%ld indicator_owned=%ld indicator=%u applied_direction=%d pending_direction=%d direction_deadline=%llu acceleration_deadline=%llu brake_active=%d brake_next=%llu brake_target=%ld brake_manual=%d motor_duty=%u running=%ld", g_config.trim_motor_variant, trace_current_position, target, enabled, manual_enabled, manual_direction, minimum_speed, indicator_target, indicator_simulator_owned, trace_indicator, *applied_direction, *pending_direction, (unsigned long long)*direction_deadline, (unsigned long long)*acceleration_deadline, brake_ramp->active, (unsigned long long)brake_ramp->next_step_at, brake_ramp->target_at_start, brake_ramp->manual_mode, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
+	TRIM_TRACE("ENTER process_trim_outputs variant=%u current=%u target=%d enabled=%d manual_enabled=%d manual_direction=%d minimum_speed=%d indicator_target=%d indicator_owned=%d indicator=%u applied_direction=%d pending_direction=%d direction_deadline=%llu acceleration_deadline=%llu brake_active=%d brake_next=%llu brake_target=%d brake_manual=%d motor_duty=%u running=%d", g_config.trim_motor_variant, trace_current_position, target, enabled, manual_enabled, manual_direction, minimum_speed, indicator_target, indicator_simulator_owned, trace_indicator, *applied_direction, *pending_direction, (unsigned long long)*direction_deadline, (unsigned long long)*acceleration_deadline, brake_ramp->active, (unsigned long long)brake_ramp->next_step_at, brake_ramp->target_at_start, brake_ramp->manual_mode, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
 
 	if (*indicator_applied != indicator)
 	{
@@ -1444,7 +1447,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 	{
 		int manual_mode = manual_enabled != 0;
 		int new_command = brake_ramp->manual_mode != manual_mode || (manual_mode ? manual_direction != 0 : target != brake_ramp->target_at_start);
-		TRIM_TRACE("trim brake ramp active manual_mode=%d new_command=%d ramp_manual=%d manual_direction=%ld target=%ld ramp_target=%ld", manual_mode, new_command, brake_ramp->manual_mode, manual_direction, target, brake_ramp->target_at_start);
+		TRIM_TRACE("trim brake ramp active manual_mode=%d new_command=%d ramp_manual=%d manual_direction=%d target=%d ramp_target=%d", manual_mode, new_command, brake_ramp->manual_mode, manual_direction, target, brake_ramp->target_at_start);
 		if (!new_command)
 		{
 			progressively_brake_trim_motor(api, device, duty_cycles, applied_direction, brake_ramp, target, manual_mode);
@@ -1471,7 +1474,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 		desired_direction = error < 0 ? -1 : 1;
 		speed_percent = 0L;
 	}
-	TRIM_TRACE("trim governor mode=%s error=%ld distance=%ld desired_direction=%d speed_percent=%ld current=%u target=%ld", manual_enabled ? "manual" : "closed_loop", manual_enabled ? error : trace_error, manual_enabled ? distance : trace_distance, desired_direction, speed_percent, trace_current_position, target);
+	TRIM_TRACE("trim governor mode=%s error=%d distance=%d desired_direction=%d speed_percent=%d current=%u target=%d", manual_enabled ? "manual" : "closed_loop", manual_enabled ? error : trace_error, manual_enabled ? distance : trace_distance, desired_direction, speed_percent, trace_current_position, target);
 	if ((desired_direction < 0 && current_position <= TRIM_POSITION_MIN) || (desired_direction > 0 && current_position >= TRIM_POSITION_MAX))
 	{
 		*pending_direction = 0;
@@ -1488,7 +1491,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 		*direction_deadline = 0;
 		*acceleration_deadline = 0;
 		progressively_brake_trim_motor(api, device, duty_cycles, applied_direction, brake_ramp, target, manual_enabled != 0);
-		TRIM_TRACE("EXIT process_trim_outputs reason=deadband_or_stop distance=%ld desired_direction=%d", manual_enabled ? distance : trace_distance, desired_direction);
+		TRIM_TRACE("EXIT process_trim_outputs reason=deadband_or_stop distance=%d desired_direction=%d", manual_enabled ? distance : trace_distance, desired_direction);
 		return;
 	}
 	cancel_trim_brake_ramp(brake_ramp);
@@ -1496,7 +1499,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 		minimum_speed = g_config.trim_motor_variant == 3U ? 50L : 40L;
 	if (minimum_speed > 100L)
 		minimum_speed = 100L;
-	TRIM_TRACE("trim minimum speed resolved=%ld", minimum_speed);
+	TRIM_TRACE("trim minimum speed resolved=%d", minimum_speed);
 
 	if (*pending_direction != 0)
 	{
@@ -1546,7 +1549,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 
 	requested_duty = (uint32_t)speed_percent * 5000U;
 	applied_duty = trim_start_ramp_duty(duty_cycles[TRIM_MOTOR_PWM_CHANNEL], requested_duty, minimum_speed, now, acceleration_deadline);
-	TRIM_TRACE("trim PWM calculation speed_percent=%ld requested=%u current_duty=%u applied=%u acceleration_deadline=%llu", speed_percent, requested_duty, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], applied_duty, (unsigned long long)*acceleration_deadline);
+	TRIM_TRACE("trim PWM calculation speed_percent=%d requested=%u current_duty=%u applied=%u acceleration_deadline=%llu", speed_percent, requested_duty, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], applied_duty, (unsigned long long)*acceleration_deadline);
 	if (duty_cycles[TRIM_MOTOR_PWM_CHANNEL] != applied_duty)
 	{
 		/* The original controller reasserts pin 28 immediately before every non-zero trim PWM update; V3 depends on this enable. */
@@ -1570,7 +1573,7 @@ static void process_trim_outputs(PokeysApi* api, sPoKeysDevice* device, uint32_t
 		}
 	}
 	InterlockedExchange(&g_trim_motor_running, 1);
-	TRIM_TRACE("EXIT process_trim_outputs reason=running target=%ld current=%u error=%ld distance=%ld direction=%d speed=%ld requested_duty=%u applied_duty=%u motor_duty=%u pin27_electrical=%u pin28_electrical=%u pin31_electrical=%u running=%ld", target, trace_current_position, manual_enabled ? error : trace_error, manual_enabled ? distance : trace_distance, desired_direction, speed_percent, requested_duty, applied_duty, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueSet, device->Pins[TRIM_ENABLE_PIN].DigitalValueSet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueSet, InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
+	TRIM_TRACE("EXIT process_trim_outputs reason=running target=%d current=%u error=%d distance=%d direction=%d speed=%d requested_duty=%u applied_duty=%u motor_duty=%u pin27_electrical=%u pin28_electrical=%u pin31_electrical=%u running=%d", target, trace_current_position, manual_enabled ? error : trace_error, manual_enabled ? distance : trace_distance, desired_direction, speed_percent, requested_duty, applied_duty, duty_cycles[TRIM_MOTOR_PWM_CHANNEL], device->Pins[TRIM_DIRECTION_A_PIN].DigitalValueSet, device->Pins[TRIM_ENABLE_PIN].DigitalValueSet, device->Pins[TRIM_DIRECTION_B_PIN].DigitalValueSet, InterlockedCompareExchange(&g_trim_motor_running, 0, 0));
 }
 
 static void process_actuator_commands(PokeysApi* api, sPoKeysDevice* device, uint32_t duty_cycles[POKEYS_PWM_CHANNELS], ULONGLONG* speedbrake_deadline, ULONGLONG* parking_brake_deadline)
@@ -2228,7 +2231,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 {
 	PokeysApi api;
 	sPoKeysDevice* device = NULL;
-	char api_error[128] = "PoKeyslib.dll could not be loaded";
+	char api_error[128] = "libPoKeys.so could not be loaded";
 	unsigned int read_failures = 0;
 	unsigned int health_counter = 0;
 	unsigned int digital_read_failures = 0;
@@ -2581,7 +2584,7 @@ static DWORD WINAPI connection_thread(LPVOID parameter)
 	fuel_cutoff_inputs_set_disconnected();
 	trim_cutout_inputs_set_disconnected();
 	status_set_disconnected("PoKeys connection thread stopped");
-	FreeLibrary(api.module);
+	dlclose(api.module);
 	log_write("Pokeys connection thread stopped");
 	return (0);
 }
@@ -2678,8 +2681,7 @@ int pokeys_thread_stop(void)
 	wait_result = WaitForSingleObject(g_thread, g_config.discovery_timeout_ms);
 	if (wait_result == WAIT_TIMEOUT)
 	{
-		log_write("Pokeys discovery did not stop within %u ms; cancelling synchronous I/O", g_config.discovery_timeout_ms);
-		CancelSynchronousIo(g_thread);
+		log_write("Pokeys discovery did not stop within %u ms; waiting for cooperative I/O completion", g_config.discovery_timeout_ms);
 		wait_result = WaitForSingleObject(g_thread, 2000);
 	}
 	if (wait_result != WAIT_OBJECT_0)
@@ -2928,7 +2930,7 @@ int pokeys_parking_brake_interlock_is_retracted(void)
 
 void pokeys_set_trim_target(uint32_t position, int enabled)
 {
-	TRIM_TRACE("ENTER pokeys_set_trim_target requested_position=%u requested_enabled=%d old_position=%ld old_enabled=%ld", position, enabled, InterlockedCompareExchange(&g_trim_target_position, 0, 0), InterlockedCompareExchange(&g_trim_motor_enabled, 0, 0));
+	TRIM_TRACE("ENTER pokeys_set_trim_target requested_position=%u requested_enabled=%d old_position=%d old_enabled=%d", position, enabled, InterlockedCompareExchange(&g_trim_target_position, 0, 0), InterlockedCompareExchange(&g_trim_motor_enabled, 0, 0));
 	if (position < TRIM_POSITION_MIN)
 		position = TRIM_POSITION_MIN;
 	if (position > TRIM_POSITION_MAX)
@@ -2940,7 +2942,7 @@ void pokeys_set_trim_target(uint32_t position, int enabled)
 
 void pokeys_set_trim_manual_command(int direction, int enabled)
 {
-	TRIM_TRACE("ENTER pokeys_set_trim_manual_command requested_direction=%d requested_enabled=%d old_direction=%ld old_enabled=%ld", direction, enabled, InterlockedCompareExchange(&g_trim_manual_direction, 0, 0), InterlockedCompareExchange(&g_trim_manual_enabled, 0, 0));
+	TRIM_TRACE("ENTER pokeys_set_trim_manual_command requested_direction=%d requested_enabled=%d old_direction=%d old_enabled=%d", direction, enabled, InterlockedCompareExchange(&g_trim_manual_direction, 0, 0), InterlockedCompareExchange(&g_trim_manual_enabled, 0, 0));
 	if (direction < 0)
 		direction = -1;
 	else if (direction > 0)
@@ -2952,7 +2954,7 @@ void pokeys_set_trim_manual_command(int direction, int enabled)
 
 void pokeys_set_trim_indicator_target(uint32_t position, int simulator_owned)
 {
-	TRIM_TRACE("ENTER pokeys_set_trim_indicator_target requested_position=%u requested_owned=%d old_position=%ld old_owned=%ld", position, simulator_owned, InterlockedCompareExchange(&g_trim_indicator_target_position, 0, 0), InterlockedCompareExchange(&g_trim_indicator_simulator_owned, 0, 0));
+	TRIM_TRACE("ENTER pokeys_set_trim_indicator_target requested_position=%u requested_owned=%d old_position=%d old_owned=%d", position, simulator_owned, InterlockedCompareExchange(&g_trim_indicator_target_position, 0, 0), InterlockedCompareExchange(&g_trim_indicator_simulator_owned, 0, 0));
 	if (position > 4095U)
 		position = 4095U;
 	InterlockedExchange(&g_trim_indicator_target_position, (LONG)position);
@@ -2962,7 +2964,7 @@ void pokeys_set_trim_indicator_target(uint32_t position, int simulator_owned)
 
 void pokeys_set_trim_min_speed(uint32_t percent)
 {
-	TRIM_TRACE("ENTER pokeys_set_trim_min_speed requested=%u old=%ld", percent, InterlockedCompareExchange(&g_trim_min_speed, 0, 0));
+	TRIM_TRACE("ENTER pokeys_set_trim_min_speed requested=%u old=%d", percent, InterlockedCompareExchange(&g_trim_min_speed, 0, 0));
 	if (percent > 100U)
 		percent = 100U;
 	InterlockedExchange(&g_trim_min_speed, (LONG)percent);

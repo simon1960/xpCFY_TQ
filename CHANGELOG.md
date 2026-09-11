@@ -2,6 +2,14 @@
 
 All notable changes to `xpCFY_TQ` are recorded here.
 
+## 1.0.6 - 2026-09-11
+
+- Added matching Windows and Linux x86-64 release packages under the standard
+  X-Plane `plugins/xpCFY_TQ/win_x64` and `plugins/xpCFY_TQ/lin_x64` layout.
+- Updated the Linux port to match the 1.0.6 Windows control logic, configuration,
+  calibration, safety limits, diagnostics and user-interface behaviour.
+- Added the Linux source mirror under `linux/src` and `linux/inc`.
+
 ## 1.0.5 - 2026-09-10
 
 - Changed the missing `enhanced_logging` configuration fallback to disabled for

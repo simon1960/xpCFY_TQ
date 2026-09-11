@@ -1,6 +1,6 @@
 # xpCFY_TQ
 
-`xpCFY_TQ` version 1.0.5 is a 64-bit Windows X-Plane plugin for CFY Boeing 737 throttle
+`xpCFY_TQ` version 1.0.6 is a 64-bit Windows and Linux X-Plane plugin for CFY Boeing 737 throttle
 quadrants. It connects X-Plane 12 and the Zibo 737/LevelUp V2 to CFY TQ V3, V4 and V4 Pro
 hardware through a PoKeys controller.
 
@@ -24,7 +24,7 @@ operation is not overridden by the plugin.
 
 ## Requirements
 
-- Microsoft Windows 64-bit.
+- Microsoft Windows 64-bit or Linux x86-64.
 - X-Plane 12.
 - Zibo 737-800X, LevelUp V2.S1 .
 - A supported CFY TQ V3, V4 or V4 Pro connected through its PoKeys interface.
@@ -43,11 +43,16 @@ https://forums.x-plane.org/files/file/101415-xpcfy_tq-plugin-for-cockpitforyou-m
    X-Plane 12\Resources\plugins\xpCFY_TQ\win_x64
    ```
 
-4. Copy both files into `win_x64`:
+4. Copy the files for the required operating system into its platform directory:
 
    ```text
+   Windows win_x64:
    xpCFY_TQ.xpl
    PoKeyslib.dll
+
+   Linux lin_x64:
+   xpCFY_TQ.xpl
+   libPoKeys.so
    ```
 
 5. Start the PoKeys-equipped throttle quadrant and ensure it is reachable by
@@ -61,12 +66,17 @@ X-Plane 12
 └── Resources
     └── plugins
         └── xpCFY_TQ
-            └── win_x64
+            ├── win_x64
+            │   ├── xpCFY_TQ.xpl
+            │   └── PoKeyslib.dll
+            └── lin_x64
                 ├── xpCFY_TQ.xpl
-                └── PoKeyslib.dll
+                └── libPoKeys.so
 ```
 
-The plugin loads `PoKeyslib.dll` from the same directory as `xpCFY_TQ.xpl`.
+The Windows plugin loads `PoKeyslib.dll` from the same directory as `xpCFY_TQ.xpl`.
+The Linux release includes `libPoKeys.so` in `lin_x64`; the plugin also supports the
+system installation at `/usr/lib/libPoKeys.so`.
 
 ## First start and calibration
 
@@ -143,6 +153,7 @@ commands from crossing the X-Plane aircraft-unload boundary.
 
 - `src/*.c` — plugin implementation.
 - `inc/*.h` and `pokeys/*.h` — plugin and PoKeys API declarations.
+- `linux/src/*.c` and `linux/inc/*.h` — Linux source and platform compatibility layer.
 - `POKEYS_HARDWARE.md` — hardware and control-logic reference.
 - `CHANGELOG.md` — versioned release history.
 - `plugins/` — ready-to-install 64-bit plugin binaries.
@@ -166,3 +177,8 @@ The project produces
 `Release/plugins/xpCFY_TQ/win_x64/xpCFY_TQ.xpl` and copies `PoKeyslib.dll`
 beside it. The `XP_SDK` directory is intentionally ignored so SDK updates do
 not become repository changes.
+
+The Linux source is stored in `linux/src` and `linux/inc`. Build it as an x86-64
+shared library with the Linux X-Plane SDK definitions and link against OpenGL,
+pthread, `dl`, `m` and PoKeys. Install the resulting `xpCFY_TQ.xpl` and
+`libPoKeys.so` beneath `Resources/plugins/xpCFY_TQ/lin_x64`.

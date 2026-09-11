@@ -23,6 +23,7 @@
     <ClCompile Include="src\aircraft_config.c" />
     <ClCompile Include="src\calibration.c" />
     <ClCompile Include="src\calibration_window.c" />
+    <ClCompile Include="src\configuration_window.c" />
     <ClCompile Include="src\log.c" />
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\plugin_config.c" />
@@ -35,6 +36,7 @@
     <ClInclude Include="inc\aircraft_config.h" />
     <ClInclude Include="inc\calibration.h" />
     <ClInclude Include="inc\calibration_window.h" />
+    <ClInclude Include="inc\configuration_window.h" />
     <ClInclude Include="inc\datastructures.h" />
     <ClInclude Include="inc\log.h" />
     <ClInclude Include="inc\plugin_config.h" />
