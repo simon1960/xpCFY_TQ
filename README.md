@@ -33,6 +33,9 @@ operation is not overridden by the plugin.
 The official plugin download site is XPlane.org and the latest stable version can be found at
 https://forums.x-plane.org/files/file/101415-xpcfy_tq-plugin-for-cockpitforyou-motorised-tqs/
 
+The GitHub build archive for version 1.0.6 is available from the
+[xpCFY_TQ v1.0.6 release](https://github.com/simon1960/xpCFY_TQ/releases/tag/v1.0.6).
+
 ## Manual Installation
 
 1. Close X-Plane.
