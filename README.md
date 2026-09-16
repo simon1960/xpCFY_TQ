@@ -13,18 +13,14 @@ provides:
 - Left and right fuel-cutoff switches.
 - Speedbrake lever, flight-detent interlock and automatic landing deployment.
 - Parking-brake switch, mechanical interlock and indicator lamp.
-- Stabilizer-trim wheel motor, position indicator and cutout switches.
+- Stabiliser-trim wheel motor, position indicator and cutout switches.
 - Nine-position flap-lever control.
-- Battery-controlled TQ backlighting.
+- Battery state controlled TQ backlighting.
 - X-Plane status, hardware calibration and live-position windows.
-
-Dedicated rejected-takeoff detection is intentionally not implemented while
-the Boeing RTO operating sequence is being investigated. Normal Zibo autobrake
-operation is not overridden by the plugin.
 
 ## Requirements
 
-- Microsoft Windows 64-bit or Linux x86-64.
+- Microsoft Windows 64-bit or Linux 64-bit.
 - X-Plane 12.
 - Zibo 737-800X, LevelUp V2.S1 .
 - A supported CFY TQ V3, V4 or V4 Pro connected through its PoKeys interface.
